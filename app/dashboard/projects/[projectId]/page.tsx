@@ -126,9 +126,13 @@ export default async function ProjectWorkspacePage({
         </div>
 
         <div className="min-w-0">
-          <ProjectWorkspaceTabs projectId={project.id} initialContent={initialContent} />
+          <ProjectWorkspaceTabs
+            projectId={project.id}
+            availableLocales={project.locales.map((locale) => locale.code)}
+            initialContent={initialContent}
+          />
           <div className="mt-3 text-xs text-slate-500">
-            Description, Keywords, Screenshot Captions, and Update Notes generation are connected. Localization regenerate remains placeholder.
+            Description, Keywords, Screenshot Captions, Update Notes, and Localization generation are connected.
           </div>
         </div>
       </div>

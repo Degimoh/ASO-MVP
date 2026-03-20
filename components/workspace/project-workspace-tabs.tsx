@@ -16,6 +16,7 @@ export type WorkspaceTabType =
   | "LOCALIZATION";
 
 type UpdateNotesMode = "bug-fix" | "minor-update" | "feature-release" | "major-release";
+type LocalizableSourceAssetType = "DESCRIPTION" | "KEYWORDS" | "SCREENSHOT_CAPTIONS" | "UPDATE_NOTES";
 
 const workspaceTabs: Array<{ key: WorkspaceTabType; label: string }> = [
   { key: "DESCRIPTION", label: "Description" },
@@ -32,8 +33,16 @@ const updateNotesModes: Array<{ value: UpdateNotesMode; label: string }> = [
   { value: "major-release", label: "Major Release" },
 ];
 
+const localizationSourceAssetOptions: Array<{ value: LocalizableSourceAssetType; label: string }> = [
+  { value: "DESCRIPTION", label: "Description" },
+  { value: "KEYWORDS", label: "Keywords" },
+  { value: "SCREENSHOT_CAPTIONS", label: "Screenshot Captions" },
+  { value: "UPDATE_NOTES", label: "Update Notes" },
+];
+
 type Props = {
   projectId: string;
+  availableLocales: string[];
   initialContent: Partial<Record<WorkspaceTabType, string>>;
 };
 
@@ -252,6 +261,22 @@ function parseUpdateNotesFromDraft(draft: string): UpdateNotesContentShape {
   };
 }
 
+function parseDescriptionFromDraft(draft: string): Record<string, unknown> | null {
+  const trimmed = draft.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 function normalizeInitialKeywords(value: string | undefined): string {
   if (!value) return "";
   const trimmed = value.trim();
@@ -324,7 +349,37 @@ function computeCaptionsMeta(draft: string): CaptionsContentShape {
   };
 }
 
-export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
+function buildLocalizationSourceContent(input: {
+  sourceAssetType: LocalizableSourceAssetType;
+  descriptionDraft: string;
+  keywordsDraft: string;
+  captionsDraft: string;
+  updateNotesDraft: string;
+}): Record<string, unknown> | null {
+  switch (input.sourceAssetType) {
+    case "DESCRIPTION":
+      return parseDescriptionFromDraft(input.descriptionDraft);
+    case "KEYWORDS": {
+      const keywordsMeta = computeKeywordsMeta(input.keywordsDraft);
+      if (keywordsMeta.keywords.length === 0) return null;
+      return keywordsMeta;
+    }
+    case "SCREENSHOT_CAPTIONS": {
+      const captionsMeta = computeCaptionsMeta(input.captionsDraft);
+      if (captionsMeta.captions.length === 0) return null;
+      return { captions: captionsMeta.captions };
+    }
+    case "UPDATE_NOTES": {
+      const updateNotes = parseUpdateNotesFromDraft(input.updateNotesDraft);
+      if (!updateNotes.title || updateNotes.notes.length === 0) return null;
+      return updateNotes;
+    }
+    default:
+      return null;
+  }
+}
+
+export function ProjectWorkspaceTabs({ projectId, availableLocales, initialContent }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTabType>("DESCRIPTION");
   const [drafts, setDrafts] = useState<Record<WorkspaceTabType, string>>({
     DESCRIPTION: initialContent.DESCRIPTION || "",
@@ -349,6 +404,12 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
   const [updateNotesError, setUpdateNotesError] = useState<string | null>(null);
   const [updateNotesMode, setUpdateNotesMode] = useState<UpdateNotesMode>("minor-update");
 
+  const [isGeneratingLocalization, setIsGeneratingLocalization] = useState(false);
+  const [localizationError, setLocalizationError] = useState<string | null>(null);
+  const [localizationSourceAsset, setLocalizationSourceAsset] =
+    useState<LocalizableSourceAssetType>("DESCRIPTION");
+  const [targetLocale, setTargetLocale] = useState<string>(availableLocales[0] || "en-US");
+
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -368,6 +429,16 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
     [],
   );
 
+  useEffect(() => {
+    if (availableLocales.length === 0) {
+      return;
+    }
+
+    if (!availableLocales.includes(targetLocale)) {
+      setTargetLocale(availableLocales[0]);
+    }
+  }, [availableLocales, targetLocale]);
+
   const activeLabel = useMemo(
     () => workspaceTabs.find((tab) => tab.key === activeTab)?.label ?? "Asset",
     [activeTab],
@@ -379,6 +450,23 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
   const keywordsMeta = useMemo(() => computeKeywordsMeta(drafts.KEYWORDS), [drafts.KEYWORDS]);
   const captionsMeta = useMemo(() => computeCaptionsMeta(drafts.SCREENSHOT_CAPTIONS), [drafts.SCREENSHOT_CAPTIONS]);
   const updateNotesMeta = useMemo(() => parseUpdateNotesFromDraft(drafts.UPDATE_NOTES), [drafts.UPDATE_NOTES]);
+  const localizationSourceContent = useMemo(
+    () =>
+      buildLocalizationSourceContent({
+        sourceAssetType: localizationSourceAsset,
+        descriptionDraft: drafts.DESCRIPTION,
+        keywordsDraft: drafts.KEYWORDS,
+        captionsDraft: drafts.SCREENSHOT_CAPTIONS,
+        updateNotesDraft: drafts.UPDATE_NOTES,
+      }),
+    [
+      drafts.DESCRIPTION,
+      drafts.KEYWORDS,
+      drafts.SCREENSHOT_CAPTIONS,
+      drafts.UPDATE_NOTES,
+      localizationSourceAsset,
+    ],
+  );
 
   async function handleCopy() {
     if (isEmpty || isTabLoading) return;
@@ -542,6 +630,58 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
     }
   }
 
+  async function runLocalizationGeneration() {
+    setLocalizationError(null);
+    setCopied(false);
+
+    if (!targetLocale) {
+      setLocalizationError("Select a target locale first");
+      return;
+    }
+
+    if (!localizationSourceContent) {
+      setLocalizationError("Source asset has no valid content to localize");
+      return;
+    }
+
+    setIsGeneratingLocalization(true);
+    setIsTabLoading(true);
+
+    try {
+      const response = await fetch("/api/generate/localization", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          sourceAssetType: localizationSourceAsset,
+          sourceContent: localizationSourceContent,
+          targetLocale,
+        }),
+      });
+
+      const body = (await response.json()) as {
+        error?: string;
+        details?: string;
+        data?: { content?: Record<string, unknown> };
+      };
+
+      if (!response.ok || !body.data?.content) {
+        throw new Error(body.error || body.details || "Failed to generate localization");
+      }
+      const localizedContent = body.data.content;
+
+      setDrafts((prev) => ({
+        ...prev,
+        LOCALIZATION: JSON.stringify(localizedContent, null, 2),
+      }));
+    } catch (error) {
+      setLocalizationError(error instanceof Error ? error.message : "Failed to generate localization");
+    } finally {
+      setIsGeneratingLocalization(false);
+      setIsTabLoading(false);
+    }
+  }
+
   function handleTabChange(nextTab: WorkspaceTabType) {
     if (nextTab === activeTab) return;
 
@@ -550,6 +690,7 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
     if (nextTab !== "KEYWORDS") setKeywordsError(null);
     if (nextTab !== "SCREENSHOT_CAPTIONS") setCaptionsError(null);
     if (nextTab !== "UPDATE_NOTES") setUpdateNotesError(null);
+    if (nextTab !== "LOCALIZATION") setLocalizationError(null);
 
     setIsTabLoading(true);
     setActiveTab(nextTab);
@@ -569,7 +710,7 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
         <div>
           <CardTitle>Generated Assets</CardTitle>
           <CardDescription>
-            Switch between tabs, edit content, and copy output. Description, Keywords, Screenshot Captions, and Update Notes are connected.
+            Switch between tabs, edit content, and copy output. Description, Keywords, Screenshot Captions, Update Notes, and Localization are connected.
           </CardDescription>
         </div>
 
@@ -703,10 +844,55 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
             ) : null}
 
             {activeTab === "LOCALIZATION" ? (
-              <Button type="button" variant="outline" size="sm" disabled>
-                <RefreshCcw className="mr-2 h-4 w-4" />
-                Regenerate (soon)
-              </Button>
+              <>
+                <Select
+                  value={localizationSourceAsset}
+                  onValueChange={(value) => setLocalizationSourceAsset(value as LocalizableSourceAssetType)}
+                >
+                  <SelectTrigger className="w-52">
+                    <SelectValue placeholder="Source asset" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {localizationSourceAssetOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={targetLocale} onValueChange={setTargetLocale}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="Locale" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableLocales.map((locale) => (
+                      <SelectItem key={locale} value={locale}>
+                        {locale}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingLocalization || !localizationSourceContent}
+                  onClick={runLocalizationGeneration}
+                >
+                  <WandSparkles className="mr-2 h-4 w-4" />
+                  {isGeneratingLocalization ? "Generating..." : "Generate Localization"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingLocalization || !localizationSourceContent}
+                  onClick={runLocalizationGeneration}
+                >
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  {isGeneratingLocalization ? "Regenerating..." : "Regenerate Localization"}
+                </Button>
+              </>
             ) : null}
           </div>
         </div>
@@ -725,6 +911,10 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
 
         {updateNotesError && activeTab === "UPDATE_NOTES" ? (
           <p className="text-sm text-red-600">{updateNotesError}</p>
+        ) : null}
+
+        {localizationError && activeTab === "LOCALIZATION" ? (
+          <p className="text-sm text-red-600">{localizationError}</p>
         ) : null}
 
         {activeTab === "KEYWORDS" && !isTabLoading ? (
@@ -753,6 +943,14 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
           </div>
         ) : null}
 
+        {activeTab === "LOCALIZATION" && !isTabLoading ? (
+          <div className="text-xs text-slate-600">
+            Localizing <span className="font-medium">{localizationSourceAsset.replaceAll("_", " ")}</span> to{" "}
+            <span className="font-medium">{targetLocale}</span>
+            {localizationSourceContent ? "" : " · source asset needs content first"}
+          </div>
+        ) : null}
+
         {isTabLoading ? (
           <div className="space-y-3">
             <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
@@ -769,6 +967,8 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
                       ? "No screenshot captions generated yet. Use Generate Captions to create the first set."
                       : activeTab === "UPDATE_NOTES"
                         ? "No update notes generated yet. Pick a mode and generate your first notes."
+                        : activeTab === "LOCALIZATION"
+                          ? "No localized content generated yet. Select source asset and locale, then generate."
                         : "No content in this tab yet. Start writing manually or use regenerate when available."}
                 </CardContent>
               </Card>
@@ -790,6 +990,8 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
                     ? "Capture your progress in seconds\nStay focused with smart reminders"
                     : activeTab === "UPDATE_NOTES"
                       ? "Title: What's New\n- Improved onboarding performance\n- Fixed reminder sync issue"
+                      : activeTab === "LOCALIZATION"
+                        ? '{\n  "localizedField": "value"\n}'
                       : `Write ${activeLabel.toLowerCase()} content here...`
               }
             />
