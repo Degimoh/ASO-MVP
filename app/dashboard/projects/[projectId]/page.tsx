@@ -31,7 +31,32 @@ export default async function ProjectWorkspacePage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const project = await getProjectWorkspaceById(projectId);
+  let project: Awaited<ReturnType<typeof getProjectWorkspaceById>> = null;
+  let loadError: string | null = null;
+
+  try {
+    project = await getProjectWorkspaceById(projectId);
+  } catch (error) {
+    loadError = error instanceof Error ? error.message : "Unknown database error";
+  }
+
+  if (loadError) {
+    return (
+      <PageShell title="Project Workspace" description="Project details and generated content tabs.">
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle>Could not load project workspace</CardTitle>
+            <CardDescription>
+              Verify `DATABASE_URL` in production and apply migrations with `prisma migrate deploy`.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-red-700">{loadError}</p>
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
 
   if (!project) {
     return (

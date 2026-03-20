@@ -17,8 +17,15 @@ function formatPlatform(platform: string) {
 }
 
 export default async function ProjectsPage() {
-  const user = await getDemoUser();
-  const projects = user ? await listProjectCardsByUserId(user.id) : [];
+  let projects: Awaited<ReturnType<typeof listProjectCardsByUserId>> = [];
+  let loadError: string | null = null;
+
+  try {
+    const user = await getDemoUser();
+    projects = user ? await listProjectCardsByUserId(user.id) : [];
+  } catch (error) {
+    loadError = error instanceof Error ? error.message : "Unknown database error";
+  }
 
   return (
     <PageShell
@@ -34,7 +41,21 @@ export default async function ProjectsPage() {
         </Button>
       </div>
 
-      {projects.length === 0 ? (
+      {loadError ? (
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle>Could not load projects</CardTitle>
+            <CardDescription>
+              Check production environment variables and run database migrations (`prisma migrate deploy`).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-red-700">{loadError}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!loadError && projects.length === 0 ? (
         <Card>
           <CardHeader>
             <CardTitle>No projects yet</CardTitle>
@@ -46,7 +67,7 @@ export default async function ProjectsPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : !loadError ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <Card key={project.id}>
@@ -72,7 +93,7 @@ export default async function ProjectsPage() {
             </Card>
           ))}
         </div>
-      )}
+      ) : null}
     </PageShell>
   );
 }
