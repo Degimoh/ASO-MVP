@@ -23,10 +23,11 @@ const workspaceTabs: Array<{ key: WorkspaceTabType; label: string }> = [
 ];
 
 type Props = {
+  projectId: string;
   initialContent: Partial<Record<WorkspaceTabType, string>>;
 };
 
-export function ProjectWorkspaceTabs({ initialContent }: Props) {
+export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTabType>("DESCRIPTION");
   const [drafts, setDrafts] = useState<Record<WorkspaceTabType, string>>({
     DESCRIPTION: initialContent.DESCRIPTION || "",
@@ -37,6 +38,8 @@ export function ProjectWorkspaceTabs({ initialContent }: Props) {
   });
   const [isTabLoading, setIsTabLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -72,12 +75,56 @@ export function ProjectWorkspaceTabs({ initialContent }: Props) {
     setTimeout(() => setCopied(false), 1500);
   }
 
+  async function handleRegenerateDescription() {
+    if (activeTab !== "DESCRIPTION") {
+      return;
+    }
+
+    setDescriptionError(null);
+    setCopied(false);
+    setIsGeneratingDescription(true);
+    setIsTabLoading(true);
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/generate-description`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      const body = (await response.json()) as {
+        error?: string;
+        details?: string;
+        data?: {
+          content?: Record<string, unknown>;
+        };
+      };
+
+      if (!response.ok || !body.data?.content) {
+        throw new Error(body.error || body.details || "Failed to generate description");
+      }
+
+      setDrafts((prev) => ({
+        ...prev,
+        DESCRIPTION: JSON.stringify(body.data?.content, null, 2),
+      }));
+    } catch (error) {
+      setDescriptionError(error instanceof Error ? error.message : "Failed to generate description");
+    } finally {
+      setIsGeneratingDescription(false);
+      setIsTabLoading(false);
+    }
+  }
+
   function handleTabChange(nextTab: WorkspaceTabType) {
     if (nextTab === activeTab) {
       return;
     }
 
     setCopied(false);
+    if (nextTab !== "DESCRIPTION") {
+      setDescriptionError(null);
+    }
     setIsTabLoading(true);
     setActiveTab(nextTab);
 
@@ -127,12 +174,28 @@ export function ProjectWorkspaceTabs({ initialContent }: Props) {
               <Copy className="mr-2 h-4 w-4" />
               {copied ? "Copied" : "Copy"}
             </Button>
-            <Button type="button" variant="outline" size="sm" disabled>
-              <RefreshCcw className="mr-2 h-4 w-4" />
-              Regenerate (soon)
-            </Button>
+            {activeTab === "DESCRIPTION" ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isGeneratingDescription}
+                onClick={handleRegenerateDescription}
+              >
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                {isGeneratingDescription ? "Generating..." : "Regenerate Description"}
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" size="sm" disabled>
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Regenerate (soon)
+              </Button>
+            )}
           </div>
         </div>
+        {descriptionError && activeTab === "DESCRIPTION" ? (
+          <p className="text-sm text-red-600">{descriptionError}</p>
+        ) : null}
 
         {isTabLoading ? (
           <div className="space-y-3">

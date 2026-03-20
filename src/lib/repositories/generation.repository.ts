@@ -1,0 +1,61 @@
+import { AssetType, GenerationStatus, Prisma } from "@prisma/client";
+import { prisma } from "@/src/lib/prisma";
+
+export async function createVersionedGenerationResult(input: {
+  projectId: string;
+  type: AssetType;
+  locale?: string | null;
+  prompt: string;
+  model: string;
+  content: Record<string, unknown>;
+  status?: GenerationStatus;
+  error?: string;
+}) {
+  const locale = input.locale ?? null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const latest = await tx.generationResult.findFirst({
+          where: {
+            projectId: input.projectId,
+            type: input.type,
+            locale,
+          },
+          orderBy: { version: "desc" },
+          select: { version: true },
+        });
+
+        const nextVersion = (latest?.version ?? 0) + 1;
+
+        return tx.generationResult.create({
+          data: {
+            projectId: input.projectId,
+            type: input.type,
+            locale,
+            version: nextVersion,
+            prompt: input.prompt,
+            model: input.model,
+            status: input.status ?? GenerationStatus.SUCCEEDED,
+            error: input.error,
+            content: input.content as Prisma.InputJsonValue,
+          },
+        });
+      });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: string }).code === "P2002" &&
+        attempt < 2
+      ) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error("Failed to create versioned generation result");
+}

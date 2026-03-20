@@ -126,9 +126,9 @@ export default async function ProjectWorkspacePage({
         </div>
 
         <div className="min-w-0">
-          <ProjectWorkspaceTabs initialContent={initialContent} />
+          <ProjectWorkspaceTabs projectId={project.id} initialContent={initialContent} />
           <div className="mt-3 text-xs text-slate-500">
-            Regenerate buttons are placeholders and AI generation is intentionally not connected yet.
+            Description regeneration is connected. Other tabs keep placeholder regenerate actions for now.
           </div>
         </div>
       </div>
