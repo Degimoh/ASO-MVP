@@ -132,7 +132,7 @@ export default async function ProjectWorkspacePage({
             initialContent={initialContent}
           />
           <div className="mt-3 text-xs text-slate-500">
-            Description, Keywords, Screenshot Captions, Update Notes, and Localization generation are connected.
+            Individual generators and Generate All are connected with partial-error handling.
           </div>
         </div>
       </div>

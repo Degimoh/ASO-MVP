@@ -62,6 +62,16 @@ type UpdateNotesContentShape = {
   notes: string[];
 };
 
+type GenerateAllAssetResponse =
+  | {
+      status: "success";
+      content: Record<string, unknown>;
+    }
+  | {
+      status: "error";
+      error: string;
+    };
+
 const CAPTION_MAX_LENGTH = 70;
 
 function normalizeKeywordSeparators(value: string) {
@@ -409,6 +419,11 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   const [localizationSourceAsset, setLocalizationSourceAsset] =
     useState<LocalizableSourceAssetType>("DESCRIPTION");
   const [targetLocale, setTargetLocale] = useState<string>(availableLocales[0] || "en-US");
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [generateAllNotice, setGenerateAllNotice] = useState<{
+    type: "success" | "partial" | "error";
+    message: string;
+  } | null>(null);
 
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -467,6 +482,13 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       localizationSourceAsset,
     ],
   );
+  const isAnyGenerationRunning =
+    isGeneratingAll ||
+    isGeneratingDescription ||
+    isGeneratingKeywords ||
+    isGeneratingCaptions ||
+    isGeneratingUpdateNotes ||
+    isGeneratingLocalization;
 
   async function handleCopy() {
     if (isEmpty || isTabLoading) return;
@@ -682,6 +704,114 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     }
   }
 
+  async function runGenerateAll() {
+    setGenerateAllNotice(null);
+    setCopied(false);
+    setDescriptionError(null);
+    setKeywordsError(null);
+    setCaptionsError(null);
+    setUpdateNotesError(null);
+    setLocalizationError(null);
+    setIsGeneratingAll(true);
+    setIsTabLoading(true);
+
+    try {
+      const response = await fetch("/api/generate/all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          updateNotesMode,
+        }),
+      });
+
+      const body = (await response.json()) as {
+        error?: string;
+        details?: string;
+        data?: {
+          assets?: {
+            description?: GenerateAllAssetResponse;
+            keywords?: GenerateAllAssetResponse;
+            screenshotCaptions?: GenerateAllAssetResponse;
+            updateNotes?: GenerateAllAssetResponse;
+          };
+          summary?: {
+            successCount?: number;
+            failureCount?: number;
+          };
+        };
+      };
+
+      if (!response.ok || !body.data?.assets) {
+        throw new Error(body.error || body.details || "Generate all failed");
+      }
+
+      const assets = body.data.assets;
+      const failures: string[] = [];
+
+      if (assets.description?.status === "error") {
+        failures.push(`Description: ${assets.description.error}`);
+        setDescriptionError(assets.description.error);
+      }
+      if (assets.keywords?.status === "error") {
+        failures.push(`Keywords: ${assets.keywords.error}`);
+        setKeywordsError(assets.keywords.error);
+      }
+      if (assets.screenshotCaptions?.status === "error") {
+        failures.push(`Screenshot Captions: ${assets.screenshotCaptions.error}`);
+        setCaptionsError(assets.screenshotCaptions.error);
+      }
+      if (assets.updateNotes?.status === "error") {
+        failures.push(`Update Notes: ${assets.updateNotes.error}`);
+        setUpdateNotesError(assets.updateNotes.error);
+      }
+
+      setDrafts((prev) => {
+        const next = { ...prev };
+
+        if (assets.description?.status === "success") {
+          next.DESCRIPTION = JSON.stringify(assets.description.content, null, 2);
+        }
+        if (assets.keywords?.status === "success") {
+          next.KEYWORDS = parseKeywordsFromUnknown(assets.keywords.content.keywords).join(", ");
+        }
+        if (assets.screenshotCaptions?.status === "success") {
+          next.SCREENSHOT_CAPTIONS = parseCaptionsFromUnknown(assets.screenshotCaptions.content.captions).join(
+            "\n",
+          );
+        }
+        if (assets.updateNotes?.status === "success") {
+          next.UPDATE_NOTES = formatUpdateNotesForEditor(parseUpdateNotesFromUnknown(assets.updateNotes.content));
+        }
+
+        return next;
+      });
+
+      const summary = body.data.summary;
+      if (failures.length === 0) {
+        setGenerateAllNotice({
+          type: "success",
+          message: `Generated all assets successfully (${summary?.successCount ?? 4}/4).`,
+        });
+      } else {
+        setGenerateAllNotice({
+          type: "partial",
+          message: `Generate all completed with partial errors (${summary?.successCount ?? 0} success, ${
+            summary?.failureCount ?? failures.length
+          } failed). ${failures.join(" | ")}`,
+        });
+      }
+    } catch (error) {
+      setGenerateAllNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Generate all failed",
+      });
+    } finally {
+      setIsGeneratingAll(false);
+      setIsTabLoading(false);
+    }
+  }
+
   function handleTabChange(nextTab: WorkspaceTabType) {
     if (nextTab === activeTab) return;
 
@@ -714,6 +844,13 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
           </CardDescription>
         </div>
 
+        <div className="flex justify-end">
+          <Button type="button" onClick={runGenerateAll} disabled={isAnyGenerationRunning}>
+            <WandSparkles className="mr-2 h-4 w-4" />
+            {isGeneratingAll ? "Generating All..." : "Generate All"}
+          </Button>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           {workspaceTabs.map((tab) => (
             <button
@@ -738,7 +875,13 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
           <p className="text-sm font-medium text-slate-900">{activeLabel}</p>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={handleCopy} disabled={isEmpty || isTabLoading}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCopy}
+              disabled={isAnyGenerationRunning || isEmpty || isTabLoading}
+            >
               <Copy className="mr-2 h-4 w-4" />
               {copied ? "Copied" : "Copy"}
             </Button>
@@ -748,7 +891,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={isGeneratingDescription}
+                disabled={isAnyGenerationRunning}
                 onClick={handleRegenerateDescription}
               >
                 <RefreshCcw className="mr-2 h-4 w-4" />
@@ -762,7 +905,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isGeneratingKeywords || keywordsMeta.keywords.length > 0}
+                  disabled={isAnyGenerationRunning || keywordsMeta.keywords.length > 0}
                   onClick={runKeywordsGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -772,7 +915,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isGeneratingKeywords}
+                  disabled={isAnyGenerationRunning}
                   onClick={runKeywordsGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -787,7 +930,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isGeneratingCaptions || captionsMeta.captions.length > 0}
+                  disabled={isAnyGenerationRunning || captionsMeta.captions.length > 0}
                   onClick={runCaptionsGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -797,7 +940,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isGeneratingCaptions}
+                  disabled={isAnyGenerationRunning}
                   onClick={runCaptionsGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -824,7 +967,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isGeneratingUpdateNotes || updateNotesMeta.notes.length > 0}
+                  disabled={isAnyGenerationRunning || updateNotesMeta.notes.length > 0}
                   onClick={runUpdateNotesGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -834,7 +977,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isGeneratingUpdateNotes}
+                  disabled={isAnyGenerationRunning}
                   onClick={runUpdateNotesGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -876,7 +1019,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isGeneratingLocalization || !localizationSourceContent}
+                  disabled={isAnyGenerationRunning || !localizationSourceContent}
                   onClick={runLocalizationGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -886,7 +1029,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isGeneratingLocalization || !localizationSourceContent}
+                  disabled={isAnyGenerationRunning || !localizationSourceContent}
                   onClick={runLocalizationGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -915,6 +1058,21 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
 
         {localizationError && activeTab === "LOCALIZATION" ? (
           <p className="text-sm text-red-600">{localizationError}</p>
+        ) : null}
+
+        {generateAllNotice ? (
+          <p
+            className={cn(
+              "text-sm",
+              generateAllNotice.type === "success"
+                ? "text-green-700"
+                : generateAllNotice.type === "partial"
+                  ? "text-amber-700"
+                  : "text-red-600",
+            )}
+          >
+            {generateAllNotice.message}
+          </p>
         ) : null}
 
         {activeTab === "KEYWORDS" && !isTabLoading ? (
