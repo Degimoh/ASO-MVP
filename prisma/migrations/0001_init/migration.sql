@@ -5,7 +5,16 @@ CREATE SCHEMA IF NOT EXISTS "public";
 CREATE TYPE "Platform" AS ENUM ('IOS', 'ANDROID', 'CROSS_PLATFORM');
 
 -- CreateEnum
+CREATE TYPE "AssetType" AS ENUM ('DESCRIPTION', 'KEYWORDS', 'SCREENSHOT_CAPTIONS', 'UPDATE_NOTES', 'LOCALIZATION');
+
+-- CreateEnum
 CREATE TYPE "GenerationType" AS ENUM ('DESCRIPTION', 'KEYWORDS', 'SCREENSHOT_CAPTIONS', 'UPDATE_NOTES', 'LOCALIZATION');
+
+-- CreateEnum
+CREATE TYPE "ProjectStatus" AS ENUM ('DRAFT', 'ACTIVE', 'ARCHIVED');
+
+-- CreateEnum
+CREATE TYPE "GenerationStatus" AS ENUM ('PENDING', 'SUCCEEDED', 'FAILED');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -25,6 +34,7 @@ CREATE TABLE "Project" (
     "appName" TEXT NOT NULL,
     "platform" "Platform" NOT NULL,
     "category" TEXT NOT NULL,
+    "status" "ProjectStatus" NOT NULL DEFAULT 'DRAFT',
     "appSummary" TEXT NOT NULL,
     "targetAudience" TEXT NOT NULL,
     "toneOfVoice" TEXT NOT NULL,
@@ -44,6 +54,7 @@ CREATE TABLE "ProjectFeature" (
     "value" TEXT NOT NULL,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ProjectFeature_pkey" PRIMARY KEY ("id")
 );
@@ -54,6 +65,7 @@ CREATE TABLE "ProjectLocale" (
     "projectId" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ProjectLocale_pkey" PRIMARY KEY ("id")
 );
@@ -62,11 +74,14 @@ CREATE TABLE "ProjectLocale" (
 CREATE TABLE "GenerationResult" (
     "id" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
-    "type" "GenerationType" NOT NULL,
+    "type" "AssetType" NOT NULL,
+    "status" "GenerationStatus" NOT NULL DEFAULT 'PENDING',
+    "version" INTEGER NOT NULL DEFAULT 1,
     "locale" TEXT,
     "prompt" TEXT NOT NULL,
     "model" TEXT NOT NULL,
     "content" JSONB NOT NULL,
+    "error" TEXT,
     "generatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -84,8 +99,10 @@ CREATE TABLE "UsageLog" (
     "latencyMs" INTEGER,
     "inputTokens" INTEGER,
     "outputTokens" INTEGER,
+    "metadata" JSONB,
     "error" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "UsageLog_pkey" PRIMARY KEY ("id")
 );
@@ -95,6 +112,9 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
 CREATE INDEX "Project_userId_idx" ON "Project"("userId");
+
+-- CreateIndex
+CREATE INDEX "Project_status_idx" ON "Project"("status");
 
 -- CreateIndex
 CREATE INDEX "ProjectFeature_projectId_idx" ON "ProjectFeature"("projectId");
@@ -107,6 +127,12 @@ CREATE UNIQUE INDEX "ProjectLocale_projectId_code_key" ON "ProjectLocale"("proje
 
 -- CreateIndex
 CREATE INDEX "GenerationResult_projectId_type_generatedAt_idx" ON "GenerationResult"("projectId", "type", "generatedAt");
+
+-- CreateIndex
+CREATE INDEX "GenerationResult_status_idx" ON "GenerationResult"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GenerationResult_projectId_type_locale_version_key" ON "GenerationResult"("projectId", "type", "locale", "version");
 
 -- CreateIndex
 CREATE INDEX "UsageLog_userId_createdAt_idx" ON "UsageLog"("userId", "createdAt");

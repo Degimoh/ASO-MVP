@@ -12,6 +12,15 @@ enum Platform {
   CROSS_PLATFORM
 }
 
+enum AssetType {
+  DESCRIPTION
+  KEYWORDS
+  SCREENSHOT_CAPTIONS
+  UPDATE_NOTES
+  LOCALIZATION
+}
+
+// Backward-compatible alias retained while moving to AssetType.
 enum GenerationType {
   DESCRIPTION
   KEYWORDS
@@ -20,14 +29,26 @@ enum GenerationType {
   LOCALIZATION
 }
 
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum GenerationStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
 model User {
-  id         String     @id @default(cuid())
-  email      String     @unique
-  name       String?
-  projects   Project[]
-  usageLogs  UsageLog[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  projects  Project[]
+  usageLogs UsageLog[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Project {
@@ -37,6 +58,7 @@ model Project {
   appName           String
   platform          Platform
   category          String
+  status            ProjectStatus      @default(DRAFT)
   appSummary        String             @db.Text
   targetAudience    String             @db.Text
   toneOfVoice       String
@@ -51,6 +73,7 @@ model Project {
   updatedAt         DateTime           @updatedAt
 
   @@index([userId])
+  @@index([status])
 }
 
 model ProjectFeature {
@@ -60,6 +83,7 @@ model ProjectFeature {
   value     String
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([projectId])
 }
@@ -70,40 +94,48 @@ model ProjectLocale {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   code      String
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([projectId, code])
   @@index([projectId])
 }
 
 model GenerationResult {
-  id          String         @id @default(cuid())
-  projectId   String
-  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  type        GenerationType
-  locale      String?
-  prompt      String         @db.Text
-  model       String
-  content     Json
+  id        String           @id @default(cuid())
+  projectId String
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      AssetType
+  status    GenerationStatus @default(PENDING)
+  version   Int              @default(1)
+  locale    String?
+  prompt    String           @db.Text
+  model     String
+  content   Json
+  error     String?          @db.Text
   generatedAt DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
   @@index([projectId, type, generatedAt])
+  @@index([status])
+  @@unique([projectId, type, locale, version])
 }
 
 model UsageLog {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projectId   String?
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  action      String
-  status      String
-  model       String?
-  latencyMs   Int?
-  inputTokens Int?
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  action       String
+  status       String
+  model        String?
+  latencyMs    Int?
+  inputTokens  Int?
   outputTokens Int?
-  error       String?  @db.Text
-  createdAt   DateTime @default(now())
+  metadata     Json?
+  error        String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([userId, createdAt])
   @@index([projectId])
