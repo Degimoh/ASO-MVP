@@ -64,6 +64,7 @@ export async function writeUsageLog(input: {
   status: string;
   model?: string;
   latencyMs?: number;
+  metadata?: Record<string, unknown>;
   error?: string;
 }) {
   return prisma.usageLog.create({
@@ -74,6 +75,7 @@ export async function writeUsageLog(input: {
       status: input.status,
       model: input.model,
       latencyMs: input.latencyMs,
+      metadata: input.metadata as Prisma.InputJsonValue | undefined,
       error: input.error,
     },
   });

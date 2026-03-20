@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeUsageLog } from "@/lib/repositories/generation-repository";
 import { requireApiUser } from "@/src/lib/auth/api";
-import { createVersionedGenerationResult } from "@/src/lib/repositories/generation.repository";
+import {
+  createVersionedGenerationResultAndDebitCredits,
+} from "@/src/lib/repositories/generation.repository";
 import { getProjectByIdForUser } from "@/src/lib/repositories/project.repository";
 import { generateAppStoreDescription } from "@/src/lib/services/description-generation.service";
 import { generateKeywords } from "@/src/lib/services/keywords-generation.service";
 import { generateScreenshotCaptions } from "@/src/lib/services/captions-generation.service";
 import { generateUpdateNotes } from "@/src/lib/services/update-notes-generation.service";
 import { AssetType } from "@prisma/client";
+import { InsufficientCreditsError } from "@/src/lib/wallet/errors";
+import { getAssetGenerationCreditCost } from "@/src/lib/wallet/generation-pricing";
 
 const payloadSchema = z.object({
   projectId: z.string().trim().min(1, "projectId is required"),
@@ -28,6 +32,8 @@ type GenerationResultPayload =
       locale: string | null;
       model: string;
       generatedAt: string;
+      creditsCharged: number;
+      walletBalanceAfter: number;
       content: Record<string, unknown>;
     }
   | {
@@ -93,14 +99,18 @@ export async function POST(request: Request) {
       try {
         const generated = await input.run();
 
-        const record = await createVersionedGenerationResult({
+        const charged = await createVersionedGenerationResultAndDebitCredits({
+          userId: user.id,
           projectId: projectRecord.id,
           type: input.assetType,
           locale: projectRecord.primaryLanguage,
           prompt: generated.prompt,
           model: generated.model,
           content: generated.content,
+          creditsCost: getAssetGenerationCreditCost(input.assetType),
+          ledgerDescription: `Generated ${input.assetType.replaceAll("_", " ").toLowerCase()}`,
         });
+        const record = charged.generation;
 
         await writeUsageLog({
           userId: user.id,
@@ -109,6 +119,10 @@ export async function POST(request: Request) {
           status: "success",
           model: generated.model,
           latencyMs: Date.now() - assetStartedAt,
+          metadata: {
+            creditsCharged: charged.chargedCredits,
+            walletBalanceAfter: charged.balanceAfter,
+          },
         });
 
         return {
@@ -118,9 +132,27 @@ export async function POST(request: Request) {
           locale: record.locale,
           model: record.model,
           generatedAt: record.generatedAt.toISOString(),
+          creditsCharged: charged.chargedCredits,
+          walletBalanceAfter: charged.balanceAfter,
           content: generated.content,
         };
       } catch (error) {
+        if (error instanceof InsufficientCreditsError) {
+          await writeUsageLog({
+            userId: user.id,
+            projectId: projectRecord.id,
+            action: input.action,
+            status: "insufficient_credits",
+            latencyMs: Date.now() - assetStartedAt,
+            error: error.message,
+          });
+
+          return {
+            status: "error",
+            error: `Insufficient credits (need ${error.required}, available ${error.available})`,
+          };
+        }
+
         await writeUsageLog({
           userId: user.id,
           projectId: projectRecord.id,
@@ -195,6 +227,13 @@ export async function POST(request: Request) {
     const values = Object.values(assets);
     const successCount = values.filter((asset) => asset.status === "success").length;
     const failureCount = values.length - successCount;
+    const chargedCredits = values.reduce((sum, asset) => {
+      if (asset.status !== "success") {
+        return sum;
+      }
+
+      return sum + asset.creditsCharged;
+    }, 0);
 
     await writeUsageLog({
       userId: user.id,
@@ -202,6 +241,9 @@ export async function POST(request: Request) {
       action: "generate_all_assets",
       status: failureCount === 0 ? "success" : successCount === 0 ? "error" : "partial",
       latencyMs: Date.now() - startedAt,
+      metadata: {
+        chargedCredits,
+      },
     });
 
     return NextResponse.json({
@@ -211,6 +253,7 @@ export async function POST(request: Request) {
         summary: {
           successCount,
           failureCount,
+          chargedCredits,
         },
       },
     });

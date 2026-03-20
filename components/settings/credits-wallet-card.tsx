@@ -44,6 +44,10 @@ type WalletResponse = {
     updatedAt: string;
   };
   packages: WalletPackage[];
+  generationPricing: {
+    perAsset: Record<string, number>;
+    generateAllProjected: number;
+  };
   ledgerEntries: WalletLedgerEntry[];
   payments: CryptoPayment[];
 };
@@ -211,6 +215,23 @@ export function CreditsWalletCard() {
               <p className="text-xs uppercase tracking-wide text-slate-500">Current balance</p>
               <p className="text-2xl font-semibold text-slate-900">{snapshot.wallet.balance} credits</p>
               <p className="text-xs text-slate-500">Updated {formatDate(snapshot.wallet.updatedAt)}</p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-slate-900">Generation credit costs</p>
+              <div className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
+                <ul className="space-y-1">
+                  {Object.entries(snapshot.generationPricing.perAsset).map(([asset, cost]) => (
+                    <li key={asset} className="flex items-center justify-between gap-2">
+                      <span>{asset.replaceAll("_", " ").toLowerCase()}</span>
+                      <Badge variant="outline">{cost} credits</Badge>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 border-t border-slate-200 pt-2 text-xs text-slate-500">
+                  Generate All projected total: {snapshot.generationPricing.generateAllProjected} credits
+                </p>
+              </div>
             </div>
 
             <div className="space-y-2">

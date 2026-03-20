@@ -3,10 +3,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeUsageLog } from "@/lib/repositories/generation-repository";
 import { requireApiUser } from "@/src/lib/auth/api";
-import { createVersionedGenerationResult } from "@/src/lib/repositories/generation.repository";
+import {
+  createVersionedGenerationResultAndDebitCredits,
+} from "@/src/lib/repositories/generation.repository";
 import { getProjectByIdForUser } from "@/src/lib/repositories/project.repository";
 import { generateAppStoreDescription } from "@/src/lib/services/description-generation.service";
 import { OpenRouterServiceError } from "@/src/lib/services/openrouter.service";
+import { InsufficientCreditsError } from "@/src/lib/wallet/errors";
+import { getAssetGenerationCreditCost } from "@/src/lib/wallet/generation-pricing";
 
 const payloadSchema = z.object({
   model: z.string().trim().min(1).optional(),
@@ -63,14 +67,18 @@ export async function POST(
       temperature: parsedBody.data.temperature,
     });
 
-    const record = await createVersionedGenerationResult({
+    const charged = await createVersionedGenerationResultAndDebitCredits({
+      userId: user.id,
       projectId: project.id,
       type: AssetType.DESCRIPTION,
       locale: project.primaryLanguage,
       prompt: generated.prompt,
       model: generated.model,
       content: generated.content,
+      creditsCost: getAssetGenerationCreditCost(AssetType.DESCRIPTION),
+      ledgerDescription: "Generated App Store description",
     });
+    const record = charged.generation;
 
     if (user) {
       await writeUsageLog({
@@ -80,6 +88,10 @@ export async function POST(
         status: "success",
         model: generated.model,
         latencyMs: Date.now() - startedAt,
+        metadata: {
+          creditsCharged: charged.chargedCredits,
+          walletBalanceAfter: charged.balanceAfter,
+        },
       });
     }
 
@@ -90,10 +102,34 @@ export async function POST(
         locale: record.locale,
         model: record.model,
         generatedAt: record.generatedAt.toISOString(),
+        creditsCharged: charged.chargedCredits,
+        walletBalanceAfter: charged.balanceAfter,
         content: generated.content,
       },
     });
   } catch (error) {
+    if (error instanceof InsufficientCreditsError) {
+      await writeUsageLog({
+        userId: user.id,
+        projectId,
+        action: "generate_description",
+        status: "insufficient_credits",
+        latencyMs: Date.now() - startedAt,
+        error: error.message,
+      });
+
+      return NextResponse.json(
+        {
+          error: "Insufficient credits",
+          details: `You need ${error.required} credits but only have ${error.available}.`,
+          code: "INSUFFICIENT_CREDITS",
+          requiredCredits: error.required,
+          availableCredits: error.available,
+        },
+        { status: 402 },
+      );
+    }
+
     if (user) {
       await writeUsageLog({
         userId: user.id,

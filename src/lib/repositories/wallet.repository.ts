@@ -1,5 +1,6 @@
 import { CryptoPaymentStatus, Prisma, WalletLedgerType } from "@prisma/client";
 import { prisma } from "@/src/lib/prisma";
+import { InsufficientCreditsError } from "@/src/lib/wallet/errors";
 
 export async function getOrCreateWalletForUser(userId: string) {
   return prisma.userWallet.upsert({
@@ -108,6 +109,72 @@ export async function findCryptoPaymentByProviderChargeId(providerChargeId: stri
 export async function findCryptoPaymentById(paymentId: string) {
   return prisma.cryptoPayment.findUnique({
     where: { id: paymentId },
+  });
+}
+
+export async function debitCreditsForUser(input: {
+  userId: string;
+  amount: number;
+  description: string;
+  reference?: string;
+}) {
+  const amount = Math.max(0, Math.floor(input.amount));
+  if (amount === 0) {
+    const wallet = await getOrCreateWalletForUser(input.userId);
+    return { balanceAfter: wallet.balance, chargedCredits: 0 };
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const wallet = await tx.userWallet.upsert({
+      where: { userId: input.userId },
+      update: {},
+      create: { userId: input.userId },
+      select: { id: true },
+    });
+
+    const debitResult = await tx.userWallet.updateMany({
+      where: {
+        id: wallet.id,
+        balance: {
+          gte: amount,
+        },
+      },
+      data: {
+        balance: {
+          decrement: amount,
+        },
+      },
+    });
+
+    if (debitResult.count === 0) {
+      const currentWallet = await tx.userWallet.findUnique({
+        where: { id: wallet.id },
+        select: { balance: true },
+      });
+      throw new InsufficientCreditsError(amount, currentWallet?.balance ?? 0);
+    }
+
+    const walletAfter = await tx.userWallet.findUnique({
+      where: { id: wallet.id },
+      select: { balance: true },
+    });
+
+    await tx.walletLedgerEntry.create({
+      data: {
+        walletId: wallet.id,
+        userId: input.userId,
+        type: WalletLedgerType.DEBIT_USAGE,
+        amount: -amount,
+        balanceAfter: walletAfter?.balance ?? 0,
+        reference: input.reference,
+        description: input.description,
+      },
+    });
+
+    return {
+      balanceAfter: walletAfter?.balance ?? 0,
+      chargedCredits: amount,
+    };
   });
 }
 

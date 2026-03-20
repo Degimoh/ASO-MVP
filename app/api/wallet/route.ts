@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiUser } from "@/src/lib/auth/api";
 import { getWalletSnapshotForUser } from "@/src/lib/repositories/wallet.repository";
 import { CREDIT_PACKAGES } from "@/src/lib/wallet/packages";
+import { GENERATION_CREDIT_COSTS, getGenerateAllProjectedCreditCost } from "@/src/lib/wallet/generation-pricing";
 
 export async function GET() {
   const auth = await requireApiUser();
@@ -20,6 +21,10 @@ export async function GET() {
           updatedAt: snapshot.wallet.updatedAt,
         },
         packages: CREDIT_PACKAGES,
+        generationPricing: {
+          perAsset: GENERATION_CREDIT_COSTS,
+          generateAllProjected: getGenerateAllProjectedCreditCost(),
+        },
         ledgerEntries: snapshot.ledgerEntries.map((entry) => ({
           id: entry.id,
           type: entry.type,

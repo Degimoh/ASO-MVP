@@ -4,6 +4,9 @@ import { generateAsoContent } from "@/lib/services/generation-service";
 import { generatePayloadSchema } from "@/lib/validations/project";
 import { requireApiUser } from "@/src/lib/auth/api";
 import { getProjectByIdForUser } from "@/src/lib/repositories/project.repository";
+import { debitCreditsForUser } from "@/src/lib/repositories/wallet.repository";
+import { InsufficientCreditsError } from "@/src/lib/wallet/errors";
+import { getLegacyGenerationCreditCost } from "@/src/lib/wallet/generation-pricing";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -48,6 +51,13 @@ export async function POST(request: Request) {
       },
     });
 
+    const debit = await debitCreditsForUser({
+      userId: user.id,
+      amount: getLegacyGenerationCreditCost(parsed.data.type),
+      description: `Generated ${parsed.data.type.replaceAll("_", " ").toLowerCase()}`,
+      reference: `${project.id}:${parsed.data.type}`,
+    });
+
     const record = await createGenerationResult({
       projectId: project.id,
       type: parsed.data.type,
@@ -64,10 +74,41 @@ export async function POST(request: Request) {
       status: generated.fallbackUsed ? "fallback" : "success",
       model: generated.model,
       latencyMs: Date.now() - startedAt,
+      metadata: {
+        creditsCharged: debit.chargedCredits,
+        walletBalanceAfter: debit.balanceAfter,
+      },
     });
 
-    return NextResponse.json({ data: record });
+    return NextResponse.json({
+      data: {
+        ...record,
+        creditsCharged: debit.chargedCredits,
+        walletBalanceAfter: debit.balanceAfter,
+      },
+    });
   } catch (error) {
+    if (error instanceof InsufficientCreditsError) {
+      await writeUsageLog({
+        userId: user.id,
+        action: "generate_failed",
+        status: "insufficient_credits",
+        latencyMs: Date.now() - startedAt,
+        error: error.message,
+      });
+
+      return NextResponse.json(
+        {
+          error: "Insufficient credits",
+          details: `You need ${error.required} credits but only have ${error.available}.`,
+          code: "INSUFFICIENT_CREDITS",
+          requiredCredits: error.required,
+          availableCredits: error.available,
+        },
+        { status: 402 },
+      );
+    }
+
     await writeUsageLog({
       userId: user.id,
       action: "generate_failed",
