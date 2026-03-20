@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProjectWorkspaceTabs, WorkspaceTabType } from "@/components/workspace/project-workspace-tabs";
 import { getProjectWorkspaceById } from "@/src/lib/repositories/project.repository";
@@ -59,13 +60,29 @@ export default async function ProjectWorkspacePage({
       title="Project Workspace"
       description="Review project context and manage ASO content drafts by tab."
     >
-      <Link
-        href="/dashboard/projects"
-        className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to projects
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href="/dashboard/projects"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to projects
+        </Link>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <a href={`/api/projects/${project.id}/export?format=json`}>
+              <Download className="mr-2 h-4 w-4" />
+              Export JSON
+            </a>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <a href={`/api/projects/${project.id}/export?format=txt`}>
+              <Download className="mr-2 h-4 w-4" />
+              Export TXT
+            </a>
+          </Button>
+        </div>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
         <div className="space-y-4">
