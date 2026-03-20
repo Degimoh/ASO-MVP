@@ -10,6 +10,17 @@ export type ProjectRecord = Prisma.ProjectGetPayload<{
   include: typeof projectWithRelations;
 }>;
 
+export type ProjectCardRecord = Prisma.ProjectGetPayload<{
+  select: {
+    id: true;
+    appName: true;
+    platform: true;
+    category: true;
+    primaryLanguage: true;
+    updatedAt: true;
+  };
+}>;
+
 export type CreateProjectInput = {
   userId: string;
   appName: string;
@@ -65,6 +76,21 @@ export async function listProjectsByUserId(userId: string): Promise<ProjectRecor
   return prisma.project.findMany({
     where: { userId },
     include: projectWithRelations,
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+export async function listProjectCardsByUserId(userId: string): Promise<ProjectCardRecord[]> {
+  return prisma.project.findMany({
+    where: { userId },
+    select: {
+      id: true,
+      appName: true,
+      platform: true,
+      category: true,
+      primaryLanguage: true,
+      updatedAt: true,
+    },
     orderBy: { updatedAt: "desc" },
   });
 }
