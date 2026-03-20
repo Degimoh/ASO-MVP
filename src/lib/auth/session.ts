@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/src/lib/prisma";
+import { getOrCreateWalletForUser } from "@/src/lib/repositories/wallet.repository";
 
 const SESSION_COOKIE_NAME = "aso_session";
 const SESSION_TTL_DAYS = 30;
@@ -10,6 +11,7 @@ export type AuthUser = {
   id: string;
   email: string;
   name: string | null;
+  walletBalance: number;
 };
 
 function hashToken(token: string) {
@@ -17,6 +19,8 @@ function hashToken(token: string) {
 }
 
 export async function createSessionForUser(userId: string) {
+  await getOrCreateWalletForUser(userId);
+
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
@@ -98,5 +102,10 @@ export async function getCurrentUserFromSession(): Promise<AuthUser | null> {
     return null;
   }
 
-  return session.user;
+  const wallet = await getOrCreateWalletForUser(session.user.id);
+
+  return {
+    ...session.user,
+    walletBalance: wallet.balance,
+  };
 }

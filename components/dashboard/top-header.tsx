@@ -8,9 +8,10 @@ import { getSectionMeta } from "@/components/dashboard/navigation";
 
 type DashboardTopHeaderProps = {
   userLabel: string;
+  userBalance: number;
 };
 
-export function DashboardTopHeader({ userLabel }: DashboardTopHeaderProps) {
+export function DashboardTopHeader({ userLabel, userBalance }: DashboardTopHeaderProps) {
   const pathname = usePathname();
   const section = getSectionMeta(pathname);
 
@@ -30,6 +31,9 @@ export function DashboardTopHeader({ userLabel }: DashboardTopHeaderProps) {
           <Button variant="outline" size="sm" className="gap-2" disabled>
             <UserCircle2 className="h-4 w-4" />
             {userLabel}
+          </Button>
+          <Button variant="outline" size="sm" disabled>
+            {userBalance} credits
           </Button>
           <LogoutButton />
         </div>
