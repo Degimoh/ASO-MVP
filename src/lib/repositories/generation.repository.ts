@@ -7,7 +7,7 @@ export async function createVersionedGenerationResult(input: {
   locale?: string | null;
   prompt: string;
   model: string;
-  content: Prisma.InputJsonValue;
+  content: Record<string, unknown>;
   status?: GenerationStatus;
   error?: string;
 }) {
