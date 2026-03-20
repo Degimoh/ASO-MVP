@@ -1,7 +1,8 @@
 "use client";
 
-import { Copy, RefreshCcw, WandSparkles } from "lucide-react";
+import { Copy, History, RefreshCcw, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,6 +45,7 @@ type Props = {
   projectId: string;
   availableLocales: string[];
   initialContent: Partial<Record<WorkspaceTabType, string>>;
+  initialVersionHistory: VersionHistoryItem[];
 };
 
 type KeywordsContentShape = {
@@ -65,12 +67,26 @@ type UpdateNotesContentShape = {
 type GenerateAllAssetResponse =
   | {
       status: "success";
+      generationId: string;
+      version: number;
+      locale: string | null;
+      model: string;
+      generatedAt: string;
       content: Record<string, unknown>;
     }
   | {
       status: "error";
       error: string;
     };
+
+type VersionHistoryItem = {
+  id: string;
+  type: WorkspaceTabType;
+  locale: string | null;
+  version: number;
+  model: string;
+  generatedAt: string;
+};
 
 const CAPTION_MAX_LENGTH = 70;
 
@@ -287,6 +303,35 @@ function parseDescriptionFromDraft(draft: string): Record<string, unknown> | nul
   return null;
 }
 
+function formatTimestamp(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown";
+  }
+
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function formatDraftForTab(tab: WorkspaceTabType, content: unknown): string {
+  if (tab === "KEYWORDS") {
+    return parseKeywordsFromUnknown(
+      typeof content === "object" && content !== null ? (content as { keywords?: unknown }).keywords : content,
+    ).join(", ");
+  }
+
+  if (tab === "SCREENSHOT_CAPTIONS") {
+    return parseCaptionsFromUnknown(
+      typeof content === "object" && content !== null ? (content as { captions?: unknown }).captions : content,
+    ).join("\n");
+  }
+
+  if (tab === "UPDATE_NOTES") {
+    return formatUpdateNotesForEditor(parseUpdateNotesFromUnknown(content));
+  }
+
+  return JSON.stringify(content, null, 2);
+}
+
 function normalizeInitialKeywords(value: string | undefined): string {
   if (!value) return "";
   const trimmed = value.trim();
@@ -389,7 +434,7 @@ function buildLocalizationSourceContent(input: {
   }
 }
 
-export function ProjectWorkspaceTabs({ projectId, availableLocales, initialContent }: Props) {
+export function ProjectWorkspaceTabs({ projectId, availableLocales, initialContent, initialVersionHistory }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTabType>("DESCRIPTION");
   const [drafts, setDrafts] = useState<Record<WorkspaceTabType, string>>({
     DESCRIPTION: initialContent.DESCRIPTION || "",
@@ -420,6 +465,9 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     useState<LocalizableSourceAssetType>("DESCRIPTION");
   const [targetLocale, setTargetLocale] = useState<string>(availableLocales[0] || "en-US");
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [versionHistory, setVersionHistory] = useState<VersionHistoryItem[]>(initialVersionHistory);
+  const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const [generateAllNotice, setGenerateAllNotice] = useState<{
     type: "success" | "partial" | "error";
     message: string;
@@ -488,7 +536,28 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     isGeneratingKeywords ||
     isGeneratingCaptions ||
     isGeneratingUpdateNotes ||
-    isGeneratingLocalization;
+    isGeneratingLocalization ||
+    restoringVersionId !== null;
+  const visibleVersionHistory = useMemo(() => {
+    const filtered = versionHistory.filter((entry) => {
+      if (entry.type !== activeTab) {
+        return false;
+      }
+
+      if (activeTab === "LOCALIZATION") {
+        return entry.locale === targetLocale;
+      }
+
+      return true;
+    });
+
+    return filtered.sort((a, b) => b.version - a.version || b.generatedAt.localeCompare(a.generatedAt));
+  }, [activeTab, targetLocale, versionHistory]);
+  const activeVersionId = visibleVersionHistory[0]?.id;
+
+  function appendVersionHistory(entry: VersionHistoryItem) {
+    setVersionHistory((prev) => (prev.some((item) => item.id === entry.id) ? prev : [entry, ...prev]));
+  }
 
   async function handleCopy() {
     if (isEmpty || isTabLoading) return;
@@ -516,7 +585,14 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
-        data?: { content?: Record<string, unknown> };
+        data?: {
+          generationId?: string;
+          version?: number;
+          model?: string;
+          locale?: string | null;
+          generatedAt?: string;
+          content?: Record<string, unknown>;
+        };
       };
 
       if (!response.ok || !body.data?.content) {
@@ -528,6 +604,19 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
         ...prev,
         DESCRIPTION: JSON.stringify(descriptionContent, null, 2),
       }));
+      if (body.data?.generationId && body.data?.version && body.data?.model) {
+        appendVersionHistory({
+          id: body.data.generationId,
+          type: "DESCRIPTION",
+          locale: "locale" in body.data ? ((body.data as { locale?: string }).locale ?? null) : null,
+          version: body.data.version,
+          model: body.data.model,
+          generatedAt:
+            "generatedAt" in body.data && typeof (body.data as { generatedAt?: unknown }).generatedAt === "string"
+              ? (body.data as { generatedAt: string }).generatedAt
+              : new Date().toISOString(),
+        });
+      }
     } catch (error) {
       setDescriptionError(error instanceof Error ? error.message : "Failed to generate description");
     } finally {
@@ -552,7 +641,14 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
-        data?: { content?: { keywords?: string[] } };
+        data?: {
+          generationId?: string;
+          version?: number;
+          model?: string;
+          locale?: string | null;
+          generatedAt?: string;
+          content?: { keywords?: string[] };
+        };
       };
 
       if (!response.ok || !body.data?.content?.keywords) {
@@ -564,6 +660,19 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
         ...prev,
         KEYWORDS: parseKeywordsFromUnknown(keywordItems).join(", "),
       }));
+      if (body.data?.generationId && body.data?.version && body.data?.model) {
+        appendVersionHistory({
+          id: body.data.generationId,
+          type: "KEYWORDS",
+          locale: "locale" in body.data ? ((body.data as { locale?: string }).locale ?? null) : null,
+          version: body.data.version,
+          model: body.data.model,
+          generatedAt:
+            "generatedAt" in body.data && typeof (body.data as { generatedAt?: unknown }).generatedAt === "string"
+              ? (body.data as { generatedAt: string }).generatedAt
+              : new Date().toISOString(),
+        });
+      }
     } catch (error) {
       setKeywordsError(error instanceof Error ? error.message : "Failed to generate keywords");
     } finally {
@@ -588,7 +697,14 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
-        data?: { content?: { captions?: string[] } };
+        data?: {
+          generationId?: string;
+          version?: number;
+          model?: string;
+          locale?: string | null;
+          generatedAt?: string;
+          content?: { captions?: string[] };
+        };
       };
 
       if (!response.ok || !body.data?.content?.captions) {
@@ -600,6 +716,19 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
         ...prev,
         SCREENSHOT_CAPTIONS: parseCaptionsFromUnknown(captionItems).join("\n"),
       }));
+      if (body.data?.generationId && body.data?.version && body.data?.model) {
+        appendVersionHistory({
+          id: body.data.generationId,
+          type: "SCREENSHOT_CAPTIONS",
+          locale: "locale" in body.data ? ((body.data as { locale?: string }).locale ?? null) : null,
+          version: body.data.version,
+          model: body.data.model,
+          generatedAt:
+            "generatedAt" in body.data && typeof (body.data as { generatedAt?: unknown }).generatedAt === "string"
+              ? (body.data as { generatedAt: string }).generatedAt
+              : new Date().toISOString(),
+        });
+      }
     } catch (error) {
       setCaptionsError(error instanceof Error ? error.message : "Failed to generate screenshot captions");
     } finally {
@@ -627,7 +756,14 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
-        data?: { content?: { title?: string; notes?: string[] } };
+        data?: {
+          generationId?: string;
+          version?: number;
+          model?: string;
+          locale?: string | null;
+          generatedAt?: string;
+          content?: { title?: string; notes?: string[] };
+        };
       };
 
       if (!response.ok || !body.data?.content) {
@@ -644,6 +780,19 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
           }),
         ),
       }));
+      if (body.data?.generationId && body.data?.version && body.data?.model) {
+        appendVersionHistory({
+          id: body.data.generationId,
+          type: "UPDATE_NOTES",
+          locale: "locale" in body.data ? ((body.data as { locale?: string }).locale ?? null) : null,
+          version: body.data.version,
+          model: body.data.model,
+          generatedAt:
+            "generatedAt" in body.data && typeof (body.data as { generatedAt?: unknown }).generatedAt === "string"
+              ? (body.data as { generatedAt: string }).generatedAt
+              : new Date().toISOString(),
+        });
+      }
     } catch (error) {
       setUpdateNotesError(error instanceof Error ? error.message : "Failed to generate update notes");
     } finally {
@@ -684,7 +833,14 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
-        data?: { content?: Record<string, unknown> };
+        data?: {
+          generationId?: string;
+          version?: number;
+          model?: string;
+          locale?: string | null;
+          generatedAt?: string;
+          content?: Record<string, unknown>;
+        };
       };
 
       if (!response.ok || !body.data?.content) {
@@ -696,6 +852,22 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
         ...prev,
         LOCALIZATION: JSON.stringify(localizedContent, null, 2),
       }));
+      if (body.data?.generationId && body.data?.version && body.data?.model) {
+        appendVersionHistory({
+          id: body.data.generationId,
+          type: "LOCALIZATION",
+          locale:
+            "locale" in body.data && typeof (body.data as { locale?: unknown }).locale === "string"
+              ? (body.data as { locale: string }).locale
+              : targetLocale,
+          version: body.data.version,
+          model: body.data.model,
+          generatedAt:
+            "generatedAt" in body.data && typeof (body.data as { generatedAt?: unknown }).generatedAt === "string"
+              ? (body.data as { generatedAt: string }).generatedAt
+              : new Date().toISOString(),
+        });
+      }
     } catch (error) {
       setLocalizationError(error instanceof Error ? error.message : "Failed to generate localization");
     } finally {
@@ -766,26 +938,60 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
         setUpdateNotesError(assets.updateNotes.error);
       }
 
+      const newHistoryEntries: VersionHistoryItem[] = [];
       setDrafts((prev) => {
         const next = { ...prev };
 
         if (assets.description?.status === "success") {
           next.DESCRIPTION = JSON.stringify(assets.description.content, null, 2);
+          newHistoryEntries.push({
+            id: assets.description.generationId,
+            type: "DESCRIPTION",
+            locale: assets.description.locale ?? null,
+            version: assets.description.version,
+            model: assets.description.model,
+            generatedAt: assets.description.generatedAt,
+          });
         }
         if (assets.keywords?.status === "success") {
           next.KEYWORDS = parseKeywordsFromUnknown(assets.keywords.content.keywords).join(", ");
+          newHistoryEntries.push({
+            id: assets.keywords.generationId,
+            type: "KEYWORDS",
+            locale: assets.keywords.locale ?? null,
+            version: assets.keywords.version,
+            model: assets.keywords.model,
+            generatedAt: assets.keywords.generatedAt,
+          });
         }
         if (assets.screenshotCaptions?.status === "success") {
           next.SCREENSHOT_CAPTIONS = parseCaptionsFromUnknown(assets.screenshotCaptions.content.captions).join(
             "\n",
           );
+          newHistoryEntries.push({
+            id: assets.screenshotCaptions.generationId,
+            type: "SCREENSHOT_CAPTIONS",
+            locale: assets.screenshotCaptions.locale ?? null,
+            version: assets.screenshotCaptions.version,
+            model: assets.screenshotCaptions.model,
+            generatedAt: assets.screenshotCaptions.generatedAt,
+          });
         }
         if (assets.updateNotes?.status === "success") {
           next.UPDATE_NOTES = formatUpdateNotesForEditor(parseUpdateNotesFromUnknown(assets.updateNotes.content));
+          newHistoryEntries.push({
+            id: assets.updateNotes.generationId,
+            type: "UPDATE_NOTES",
+            locale: assets.updateNotes.locale ?? null,
+            version: assets.updateNotes.version,
+            model: assets.updateNotes.model,
+            generatedAt: assets.updateNotes.generatedAt,
+          });
         }
 
         return next;
       });
+      newHistoryEntries.forEach(appendVersionHistory);
 
       const summary = body.data.summary;
       if (failures.length === 0) {
@@ -812,6 +1018,56 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     }
   }
 
+  async function handleRestoreVersion(generationId: string) {
+    setRestoreError(null);
+    setCopied(false);
+    setRestoringVersionId(generationId);
+    setIsTabLoading(true);
+
+    try {
+      const response = await fetch(`/api/generate/${generationId}/restore`, {
+        method: "POST",
+      });
+      const body = (await response.json()) as {
+        error?: string;
+        details?: string;
+        data?: {
+          generationId: string;
+          type: WorkspaceTabType;
+          locale: string | null;
+          version: number;
+          model: string;
+          generatedAt: string;
+          content: unknown;
+        };
+      };
+
+      if (!response.ok || !body.data) {
+        throw new Error(body.error || body.details || "Failed to restore selected version");
+      }
+
+      const restored = body.data;
+
+      setDrafts((prev) => ({
+        ...prev,
+        [restored.type]: formatDraftForTab(restored.type, restored.content),
+      }));
+      appendVersionHistory({
+        id: restored.generationId,
+        type: restored.type,
+        locale: restored.locale,
+        version: restored.version,
+        model: restored.model,
+        generatedAt: restored.generatedAt,
+      });
+    } catch (error) {
+      setRestoreError(error instanceof Error ? error.message : "Failed to restore selected version");
+    } finally {
+      setRestoringVersionId(null);
+      setIsTabLoading(false);
+    }
+  }
+
   function handleTabChange(nextTab: WorkspaceTabType) {
     if (nextTab === activeTab) return;
 
@@ -821,6 +1077,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     if (nextTab !== "SCREENSHOT_CAPTIONS") setCaptionsError(null);
     if (nextTab !== "UPDATE_NOTES") setUpdateNotesError(null);
     if (nextTab !== "LOCALIZATION") setLocalizationError(null);
+    setRestoreError(null);
 
     setIsTabLoading(true);
     setActiveTab(nextTab);
@@ -1075,6 +1332,8 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
           </p>
         ) : null}
 
+        {restoreError ? <p className="text-sm text-red-600">{restoreError}</p> : null}
+
         {activeTab === "KEYWORDS" && !isTabLoading ? (
           <div className="text-xs text-slate-600">
             {keywordsMeta.keywords.length} keywords · {keywordsMeta.characterCount} / 100 characters ·{" "}
@@ -1153,6 +1412,55 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                       : `Write ${activeLabel.toLowerCase()} content here...`
               }
             />
+
+            <div className="space-y-2 rounded-md border border-slate-200 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                <History className="h-4 w-4" />
+                Version History
+                {activeTab === "LOCALIZATION" ? (
+                  <span className="text-xs font-normal text-slate-500">({targetLocale})</span>
+                ) : null}
+              </div>
+
+              {visibleVersionHistory.length === 0 ? (
+                <p className="text-xs text-slate-500">No generated versions for this asset yet.</p>
+              ) : (
+                <div className="max-h-56 space-y-2 overflow-y-auto">
+                  {visibleVersionHistory.map((entry) => {
+                    const isCurrent = entry.id === activeVersionId;
+                    const isRestoringThis = restoringVersionId === entry.id;
+
+                    return (
+                      <div
+                        key={entry.id}
+                        className={cn(
+                          "flex items-start justify-between gap-3 rounded-md border p-2",
+                          isCurrent ? "border-slate-900 bg-slate-50" : "border-slate-200",
+                        )}
+                      >
+                        <div className="space-y-1 text-xs text-slate-600">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-900">v{entry.version}</span>
+                            {isCurrent ? <Badge variant="secondary">Current</Badge> : null}
+                          </div>
+                          <p>Model: {entry.model}</p>
+                          <p>Generated: {formatTimestamp(entry.generatedAt)}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={isAnyGenerationRunning || isCurrent}
+                          onClick={() => handleRestoreVersion(entry.id)}
+                        >
+                          {isRestoringThis ? "Restoring..." : isCurrent ? "Current" : "Restore"}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </>
         )}
       </CardContent>

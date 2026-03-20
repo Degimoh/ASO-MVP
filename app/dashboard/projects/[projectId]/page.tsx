@@ -54,6 +54,14 @@ export default async function ProjectWorkspacePage({
       initialContent[key] = toEditableText(result.content);
     }
   }
+  const initialVersionHistory = project.generationResults.map((result) => ({
+    id: result.id,
+    type: result.type as WorkspaceTabType,
+    locale: result.locale,
+    version: result.version,
+    model: result.model,
+    generatedAt: result.generatedAt.toISOString(),
+  }));
 
   return (
     <PageShell
@@ -147,6 +155,7 @@ export default async function ProjectWorkspacePage({
             projectId={project.id}
             availableLocales={project.locales.map((locale) => locale.code)}
             initialContent={initialContent}
+            initialVersionHistory={initialVersionHistory}
           />
           <div className="mt-3 text-xs text-slate-500">
             Individual generators and Generate All are connected with partial-error handling.

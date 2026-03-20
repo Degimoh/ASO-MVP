@@ -7,7 +7,7 @@ export async function createVersionedGenerationResult(input: {
   locale?: string | null;
   prompt: string;
   model: string;
-  content: Record<string, unknown>;
+  content: Prisma.InputJsonValue;
   status?: GenerationStatus;
   error?: string;
 }) {
@@ -58,4 +58,71 @@ export async function createVersionedGenerationResult(input: {
   }
 
   throw new Error("Failed to create versioned generation result");
+}
+
+export type GenerationHistoryEntry = {
+  id: string;
+  projectId: string;
+  type: AssetType;
+  locale: string | null;
+  version: number;
+  model: string;
+  generatedAt: Date;
+  content: Prisma.JsonValue;
+};
+
+export async function restoreGenerationVersionById(generationId: string) {
+  return prisma.$transaction(async (tx) => {
+    const source = await tx.generationResult.findUnique({
+      where: { id: generationId },
+      select: {
+        id: true,
+        projectId: true,
+        type: true,
+        locale: true,
+        version: true,
+        model: true,
+        content: true,
+      },
+    });
+
+    if (!source) {
+      return null;
+    }
+
+    const latest = await tx.generationResult.findFirst({
+      where: {
+        projectId: source.projectId,
+        type: source.type,
+        locale: source.locale,
+      },
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
+
+    const restored = await tx.generationResult.create({
+      data: {
+        projectId: source.projectId,
+        type: source.type,
+        locale: source.locale,
+        version: (latest?.version ?? 0) + 1,
+        prompt: `Restored from version ${source.version}`,
+        model: source.model,
+        status: GenerationStatus.SUCCEEDED,
+        content: source.content as Prisma.InputJsonValue,
+      },
+      select: {
+        id: true,
+        projectId: true,
+        type: true,
+        locale: true,
+        version: true,
+        model: true,
+        generatedAt: true,
+        content: true,
+      },
+    });
+
+    return restored;
+  });
 }

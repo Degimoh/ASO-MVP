@@ -88,6 +88,7 @@ export async function POST(request: Request) {
         model: record.model,
         locale: parsedBody.data.targetLocale,
         sourceAssetType: parsedBody.data.sourceAssetType,
+        generatedAt: record.generatedAt.toISOString(),
         content: generated.content,
       },
     });

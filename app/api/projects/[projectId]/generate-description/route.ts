@@ -83,7 +83,9 @@ export async function POST(
       data: {
         generationId: record.id,
         version: record.version,
+        locale: record.locale,
         model: record.model,
+        generatedAt: record.generatedAt.toISOString(),
         content: generated.content,
       },
     });

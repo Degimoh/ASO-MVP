@@ -25,7 +25,9 @@ type GenerationResultPayload =
       status: "success";
       generationId: string;
       version: number;
+      locale: string | null;
       model: string;
+      generatedAt: string;
       content: Record<string, unknown>;
     }
   | {
@@ -109,7 +111,9 @@ export async function POST(request: Request) {
           status: "success",
           generationId: record.id,
           version: record.version,
+          locale: record.locale,
           model: record.model,
+          generatedAt: record.generatedAt.toISOString(),
           content: generated.content,
         };
       } catch (error) {
