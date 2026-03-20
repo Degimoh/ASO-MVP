@@ -25,6 +25,7 @@ AI ASO Generator is a SaaS MVP for creating App Store Optimization assets with a
 - Save generation results to PostgreSQL
 - Export project assets as JSON and TXT
 - Usage logging for generation actions
+- Internal credits wallet with crypto checkout support (mock or Coinbase Commerce)
 
 ## Architecture
 
@@ -98,3 +99,13 @@ Open http://localhost:3000.
 Set `OPENROUTER_API_KEY` in `.env` to use live generation.
 
 If no key is set, the app uses a deterministic fallback template response so the MVP workflow still works.
+
+## Internal Credits + Crypto Checkout
+
+- Wallet APIs: `GET /api/wallet`, `POST /api/wallet/checkout`
+- Mock confirmation API (for local testing): `POST /api/wallet/payments/[paymentId]/simulate-confirm`
+- Coinbase Commerce webhook endpoint: `POST /api/webhooks/coinbase-commerce`
+- Configure in `.env`:
+  - `CRYPTO_PROVIDER=mock` (default) or `coinbase`
+  - `COINBASE_COMMERCE_API_KEY`
+  - `COINBASE_COMMERCE_WEBHOOK_SECRET`

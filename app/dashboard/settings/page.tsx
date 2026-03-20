@@ -1,4 +1,5 @@
 import { PageShell } from "@/components/dashboard/page-shell";
+import { CreditsWalletCard } from "@/components/settings/credits-wallet-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,8 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+
+        <CreditsWalletCard />
       </div>
     </PageShell>
   );

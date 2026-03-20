@@ -1,4 +1,4 @@
-import { AssetType, GenerationStatus, Platform, ProjectStatus } from "@prisma/client";
+import { AssetType, GenerationStatus, Platform, ProjectStatus, WalletLedgerType } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth/password";
 import { prisma } from "../src/lib/prisma";
 
@@ -14,6 +14,7 @@ async function main() {
   });
 
   await prisma.project.deleteMany({ where: { userId: demoUser.id } });
+  await prisma.userWallet.deleteMany({ where: { userId: demoUser.id } });
 
   const project = await prisma.project.create({
     data: {
@@ -67,6 +68,24 @@ async function main() {
       status: "success",
       model: "openai/gpt-4o-mini",
       latencyMs: 420,
+    },
+  });
+
+  const wallet = await prisma.userWallet.create({
+    data: {
+      userId: demoUser.id,
+      balance: 200,
+    },
+  });
+
+  await prisma.walletLedgerEntry.create({
+    data: {
+      walletId: wallet.id,
+      userId: demoUser.id,
+      type: WalletLedgerType.CREDIT_ADJUSTMENT,
+      amount: 200,
+      balanceAfter: 200,
+      description: "Seed credits for demo account",
     },
   });
 
