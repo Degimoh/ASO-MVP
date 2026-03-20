@@ -4,6 +4,7 @@ import { Copy, RefreshCcw, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -14,12 +15,21 @@ export type WorkspaceTabType =
   | "UPDATE_NOTES"
   | "LOCALIZATION";
 
+type UpdateNotesMode = "bug-fix" | "minor-update" | "feature-release" | "major-release";
+
 const workspaceTabs: Array<{ key: WorkspaceTabType; label: string }> = [
   { key: "DESCRIPTION", label: "Description" },
   { key: "KEYWORDS", label: "Keywords" },
   { key: "SCREENSHOT_CAPTIONS", label: "Screenshot Captions" },
   { key: "UPDATE_NOTES", label: "Update Notes" },
   { key: "LOCALIZATION", label: "Localization" },
+];
+
+const updateNotesModes: Array<{ value: UpdateNotesMode; label: string }> = [
+  { value: "bug-fix", label: "Bug Fix" },
+  { value: "minor-update", label: "Minor Update" },
+  { value: "feature-release", label: "Feature Release" },
+  { value: "major-release", label: "Major Release" },
 ];
 
 type Props = {
@@ -36,6 +46,11 @@ type KeywordsContentShape = {
 type CaptionsContentShape = {
   captions: string[];
   overLimitCount: number;
+};
+
+type UpdateNotesContentShape = {
+  title: string;
+  notes: string[];
 };
 
 const CAPTION_MAX_LENGTH = 70;
@@ -160,15 +175,87 @@ function parseCaptionsFromDraft(draft: string): string[] {
   );
 }
 
-function normalizeInitialKeywords(value: string | undefined): string {
-  if (!value) {
+function parseUpdateNotesFromUnknown(value: unknown): UpdateNotesContentShape {
+  if (typeof value !== "object" || value === null) {
+    return { title: "", notes: [] };
+  }
+
+  const title =
+    "title" in value && typeof (value as { title?: unknown }).title === "string"
+      ? (value as { title: string }).title.trim()
+      : "";
+
+  const notes =
+    "notes" in value && Array.isArray((value as { notes?: unknown }).notes)
+      ? dedupeList(
+          ((value as { notes: unknown[] }).notes || [])
+            .filter((note): note is string => typeof note === "string")
+            .map((note) => note.trim().replace(/\s+/g, " "))
+            .filter(Boolean),
+        )
+      : [];
+
+  return { title, notes };
+}
+
+function formatUpdateNotesForEditor(value: UpdateNotesContentShape) {
+  if (!value.title && value.notes.length === 0) {
     return "";
   }
 
-  const trimmed = value.trim();
+  return [
+    `Title: ${value.title}`,
+    "",
+    ...value.notes.map((note) => `- ${note}`),
+  ]
+    .join("\n")
+    .trim();
+}
+
+function parseUpdateNotesFromDraft(draft: string): UpdateNotesContentShape {
+  const trimmed = draft.trim();
   if (!trimmed) {
-    return "";
+    return { title: "", notes: [] };
   }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (typeof parsed === "object" && parsed !== null && "title" in parsed && "notes" in parsed) {
+      return parseUpdateNotesFromUnknown(parsed);
+    }
+  } catch {
+    // Parse text format below.
+  }
+
+  const lines = trimmed.split("\n").map((line) => line.trim()).filter(Boolean);
+
+  let title = "";
+  const notes: string[] = [];
+
+  for (const line of lines) {
+    if (!title && /^title\s*:/i.test(line)) {
+      title = line.replace(/^title\s*:/i, "").trim();
+      continue;
+    }
+
+    if (!title) {
+      title = line.replace(/^[-*]\s*/, "").trim();
+      continue;
+    }
+
+    notes.push(line.replace(/^[-*]\s*/, "").trim());
+  }
+
+  return {
+    title,
+    notes: dedupeList(notes.filter(Boolean)),
+  };
+}
+
+function normalizeInitialKeywords(value: string | undefined): string {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
 
   try {
     const parsed = JSON.parse(trimmed) as unknown;
@@ -183,19 +270,31 @@ function normalizeInitialKeywords(value: string | undefined): string {
 }
 
 function normalizeInitialCaptions(value: string | undefined): string {
-  if (!value) {
-    return "";
-  }
-
+  if (!value) return "";
   const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
-  }
+  if (!trimmed) return "";
 
   try {
     const parsed = JSON.parse(trimmed) as unknown;
     if (typeof parsed === "object" && parsed !== null && "captions" in parsed) {
       return parseCaptionsFromUnknown((parsed as { captions?: unknown }).captions).join("\n");
+    }
+  } catch {
+    // Keep draft as-is.
+  }
+
+  return trimmed;
+}
+
+function normalizeInitialUpdateNotes(value: string | undefined): string {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (typeof parsed === "object" && parsed !== null && "title" in parsed && "notes" in parsed) {
+      return formatUpdateNotesForEditor(parseUpdateNotesFromUnknown(parsed));
     }
   } catch {
     // Keep draft as-is.
@@ -231,17 +330,25 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
     DESCRIPTION: initialContent.DESCRIPTION || "",
     KEYWORDS: normalizeInitialKeywords(initialContent.KEYWORDS),
     SCREENSHOT_CAPTIONS: normalizeInitialCaptions(initialContent.SCREENSHOT_CAPTIONS),
-    UPDATE_NOTES: initialContent.UPDATE_NOTES || "",
+    UPDATE_NOTES: normalizeInitialUpdateNotes(initialContent.UPDATE_NOTES),
     LOCALIZATION: initialContent.LOCALIZATION || "",
   });
   const [isTabLoading, setIsTabLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
+
   const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
   const [keywordsError, setKeywordsError] = useState<string | null>(null);
+
   const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
   const [captionsError, setCaptionsError] = useState<string | null>(null);
+
+  const [isGeneratingUpdateNotes, setIsGeneratingUpdateNotes] = useState(false);
+  const [updateNotesError, setUpdateNotesError] = useState<string | null>(null);
+  const [updateNotesMode, setUpdateNotesMode] = useState<UpdateNotesMode>("minor-update");
+
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -268,8 +375,10 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
 
   const activeContent = drafts[activeTab];
   const isEmpty = activeContent.trim().length === 0;
+
   const keywordsMeta = useMemo(() => computeKeywordsMeta(drafts.KEYWORDS), [drafts.KEYWORDS]);
   const captionsMeta = useMemo(() => computeCaptionsMeta(drafts.SCREENSHOT_CAPTIONS), [drafts.SCREENSHOT_CAPTIONS]);
+  const updateNotesMeta = useMemo(() => parseUpdateNotesFromDraft(drafts.UPDATE_NOTES), [drafts.UPDATE_NOTES]);
 
   async function handleCopy() {
     if (isEmpty || isTabLoading) return;
@@ -280,9 +389,7 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
   }
 
   async function handleRegenerateDescription() {
-    if (activeTab !== "DESCRIPTION") {
-      return;
-    }
+    if (activeTab !== "DESCRIPTION") return;
 
     setDescriptionError(null);
     setCopied(false);
@@ -299,18 +406,17 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
       const body = (await response.json()) as {
         error?: string;
         details?: string;
-        data?: {
-          content?: Record<string, unknown>;
-        };
+        data?: { content?: Record<string, unknown> };
       };
 
       if (!response.ok || !body.data?.content) {
         throw new Error(body.error || body.details || "Failed to generate description");
       }
+      const descriptionContent = body.data.content;
 
       setDrafts((prev) => ({
         ...prev,
-        DESCRIPTION: JSON.stringify(body.data?.content, null, 2),
+        DESCRIPTION: JSON.stringify(descriptionContent, null, 2),
       }));
     } catch (error) {
       setDescriptionError(error instanceof Error ? error.message : "Failed to generate description");
@@ -336,22 +442,17 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
       const body = (await response.json()) as {
         error?: string;
         details?: string;
-        data?: {
-          content?: {
-            keywords?: string[];
-          };
-        };
+        data?: { content?: { keywords?: string[] } };
       };
 
       if (!response.ok || !body.data?.content?.keywords) {
         throw new Error(body.error || body.details || "Failed to generate keywords");
       }
-
-      const normalizedKeywords = parseKeywordsFromUnknown(body.data.content.keywords);
+      const keywordItems = body.data.content.keywords;
 
       setDrafts((prev) => ({
         ...prev,
-        KEYWORDS: normalizedKeywords.join(", "),
+        KEYWORDS: parseKeywordsFromUnknown(keywordItems).join(", "),
       }));
     } catch (error) {
       setKeywordsError(error instanceof Error ? error.message : "Failed to generate keywords");
@@ -377,22 +478,17 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
       const body = (await response.json()) as {
         error?: string;
         details?: string;
-        data?: {
-          content?: {
-            captions?: string[];
-          };
-        };
+        data?: { content?: { captions?: string[] } };
       };
 
       if (!response.ok || !body.data?.content?.captions) {
         throw new Error(body.error || body.details || "Failed to generate screenshot captions");
       }
-
-      const normalizedCaptions = parseCaptionsFromUnknown(body.data.content.captions);
+      const captionItems = body.data.content.captions;
 
       setDrafts((prev) => ({
         ...prev,
-        SCREENSHOT_CAPTIONS: normalizedCaptions.join("\n"),
+        SCREENSHOT_CAPTIONS: parseCaptionsFromUnknown(captionItems).join("\n"),
       }));
     } catch (error) {
       setCaptionsError(error instanceof Error ? error.message : "Failed to generate screenshot captions");
@@ -402,21 +498,59 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
     }
   }
 
-  function handleTabChange(nextTab: WorkspaceTabType) {
-    if (nextTab === activeTab) {
-      return;
+  async function runUpdateNotesGeneration() {
+    setUpdateNotesError(null);
+    setCopied(false);
+    setIsGeneratingUpdateNotes(true);
+    setIsTabLoading(true);
+
+    try {
+      const response = await fetch("/api/generate/update-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          mode: updateNotesMode,
+        }),
+      });
+
+      const body = (await response.json()) as {
+        error?: string;
+        details?: string;
+        data?: { content?: { title?: string; notes?: string[] } };
+      };
+
+      if (!response.ok || !body.data?.content) {
+        throw new Error(body.error || body.details || "Failed to generate update notes");
+      }
+      const updateNotesContent = body.data.content;
+
+      setDrafts((prev) => ({
+        ...prev,
+        UPDATE_NOTES: formatUpdateNotesForEditor(
+          parseUpdateNotesFromUnknown({
+            title: updateNotesContent.title,
+            notes: updateNotesContent.notes,
+          }),
+        ),
+      }));
+    } catch (error) {
+      setUpdateNotesError(error instanceof Error ? error.message : "Failed to generate update notes");
+    } finally {
+      setIsGeneratingUpdateNotes(false);
+      setIsTabLoading(false);
     }
+  }
+
+  function handleTabChange(nextTab: WorkspaceTabType) {
+    if (nextTab === activeTab) return;
 
     setCopied(false);
-    if (nextTab !== "DESCRIPTION") {
-      setDescriptionError(null);
-    }
-    if (nextTab !== "KEYWORDS") {
-      setKeywordsError(null);
-    }
-    if (nextTab !== "SCREENSHOT_CAPTIONS") {
-      setCaptionsError(null);
-    }
+    if (nextTab !== "DESCRIPTION") setDescriptionError(null);
+    if (nextTab !== "KEYWORDS") setKeywordsError(null);
+    if (nextTab !== "SCREENSHOT_CAPTIONS") setCaptionsError(null);
+    if (nextTab !== "UPDATE_NOTES") setUpdateNotesError(null);
+
     setIsTabLoading(true);
     setActiveTab(nextTab);
 
@@ -435,7 +569,7 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
         <div>
           <CardTitle>Generated Assets</CardTitle>
           <CardDescription>
-            Switch between tabs, edit content, and copy output. Description, Keywords, and Screenshot Captions are connected.
+            Switch between tabs, edit content, and copy output. Description, Keywords, Screenshot Captions, and Update Notes are connected.
           </CardDescription>
         </div>
 
@@ -461,6 +595,7 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-medium text-slate-900">{activeLabel}</p>
+
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={handleCopy} disabled={isEmpty || isTabLoading}>
               <Copy className="mr-2 h-4 w-4" />
@@ -530,7 +665,44 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
               </>
             ) : null}
 
-            {activeTab !== "DESCRIPTION" && activeTab !== "KEYWORDS" && activeTab !== "SCREENSHOT_CAPTIONS" ? (
+            {activeTab === "UPDATE_NOTES" ? (
+              <>
+                <Select value={updateNotesMode} onValueChange={(value) => setUpdateNotesMode(value as UpdateNotesMode)}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Mode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {updateNotesModes.map((mode) => (
+                      <SelectItem key={mode.value} value={mode.value}>
+                        {mode.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingUpdateNotes || updateNotesMeta.notes.length > 0}
+                  onClick={runUpdateNotesGeneration}
+                >
+                  <WandSparkles className="mr-2 h-4 w-4" />
+                  {isGeneratingUpdateNotes ? "Generating..." : "Generate Update Notes"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingUpdateNotes}
+                  onClick={runUpdateNotesGeneration}
+                >
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  {isGeneratingUpdateNotes ? "Regenerating..." : "Regenerate Update Notes"}
+                </Button>
+              </>
+            ) : null}
+
+            {activeTab === "LOCALIZATION" ? (
               <Button type="button" variant="outline" size="sm" disabled>
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Regenerate (soon)
@@ -549,6 +721,10 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
 
         {captionsError && activeTab === "SCREENSHOT_CAPTIONS" ? (
           <p className="text-sm text-red-600">{captionsError}</p>
+        ) : null}
+
+        {updateNotesError && activeTab === "UPDATE_NOTES" ? (
+          <p className="text-sm text-red-600">{updateNotesError}</p>
         ) : null}
 
         {activeTab === "KEYWORDS" && !isTabLoading ? (
@@ -571,6 +747,12 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
           </div>
         ) : null}
 
+        {activeTab === "UPDATE_NOTES" && !isTabLoading ? (
+          <div className="text-xs text-slate-600">
+            {updateNotesMeta.notes.length} notes · title {updateNotesMeta.title ? "set" : "missing"}
+          </div>
+        ) : null}
+
         {isTabLoading ? (
           <div className="space-y-3">
             <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
@@ -585,7 +767,9 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
                     ? "No keywords generated yet. Use Generate Keywords to create the first set."
                     : activeTab === "SCREENSHOT_CAPTIONS"
                       ? "No screenshot captions generated yet. Use Generate Captions to create the first set."
-                      : "No content in this tab yet. Start writing manually or use regenerate when available."}
+                      : activeTab === "UPDATE_NOTES"
+                        ? "No update notes generated yet. Pick a mode and generate your first notes."
+                        : "No content in this tab yet. Start writing manually or use regenerate when available."}
                 </CardContent>
               </Card>
             ) : null}
@@ -604,7 +788,9 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
                   ? "keyword one, keyword two, keyword three"
                   : activeTab === "SCREENSHOT_CAPTIONS"
                     ? "Capture your progress in seconds\nStay focused with smart reminders"
-                    : `Write ${activeLabel.toLowerCase()} content here...`
+                    : activeTab === "UPDATE_NOTES"
+                      ? "Title: What's New\n- Improved onboarding performance\n- Fixed reminder sync issue"
+                      : `Write ${activeLabel.toLowerCase()} content here...`
               }
             />
           </>
