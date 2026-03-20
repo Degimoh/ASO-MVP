@@ -1,13 +1,33 @@
 import { NextResponse } from "next/server";
-import { createProject, getOrCreateDemoUser, listProjectsForUser, mapProjectResponse } from "@/lib/repositories/project-repository";
+import { requireApiUser } from "@/src/lib/auth/api";
+import { createProject, listProjectsByUserId } from "@/src/lib/repositories/project.repository";
 import { projectPayloadSchema } from "@/lib/validations/project";
 
 export async function GET() {
-  const user = await getOrCreateDemoUser();
-  const projects = await listProjectsForUser(user.id);
+  const auth = await requireApiUser();
+  if (!auth.user) {
+    return auth.unauthorizedResponse;
+  }
+
+  const projects = await listProjectsByUserId(auth.user.id);
 
   return NextResponse.json({
-    data: projects.map((project) => mapProjectResponse(project)),
+    data: projects.map((project) => ({
+      id: project.id,
+      appName: project.appName,
+      platform: project.platform,
+      category: project.category,
+      appSummary: project.appSummary,
+      coreFeatures: project.features.map((feature) => feature.value),
+      targetAudience: project.targetAudience,
+      toneOfVoice: project.toneOfVoice,
+      primaryLanguage: project.primaryLanguage,
+      targetLocales: project.locales.map((locale) => locale.code),
+      competitors: project.competitors,
+      importantKeywords: project.importantKeywords,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+    })),
   });
 }
 
@@ -23,10 +43,47 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = await getOrCreateDemoUser();
-    const project = await createProject(user.id, parsed.data);
+    const auth = await requireApiUser();
+    if (!auth.user) {
+      return auth.unauthorizedResponse;
+    }
 
-    return NextResponse.json({ data: mapProjectResponse(project) }, { status: 201 });
+    const project = await createProject({
+      userId: auth.user.id,
+      appName: parsed.data.appName,
+      platform: parsed.data.platform,
+      category: parsed.data.category,
+      appSummary: parsed.data.appSummary,
+      coreFeatures: parsed.data.coreFeatures,
+      targetAudience: parsed.data.targetAudience,
+      toneOfVoice: parsed.data.toneOfVoice,
+      primaryLanguage: parsed.data.primaryLanguage,
+      targetLocales: parsed.data.targetLocales,
+      competitors: parsed.data.competitors,
+      importantKeywords: parsed.data.importantKeywords,
+    });
+
+    return NextResponse.json(
+      {
+        data: {
+          id: project.id,
+          appName: project.appName,
+          platform: project.platform,
+          category: project.category,
+          appSummary: project.appSummary,
+          coreFeatures: project.features.map((feature) => feature.value),
+          targetAudience: project.targetAudience,
+          toneOfVoice: project.toneOfVoice,
+          primaryLanguage: project.primaryLanguage,
+          targetLocales: project.locales.map((locale) => locale.code),
+          competitors: project.competitors,
+          importantKeywords: project.importantKeywords,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+        },
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to create project", details: error instanceof Error ? error.message : "Unknown error" },

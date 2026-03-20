@@ -30,6 +30,33 @@ export async function updateGenerationResult(generationId: string, content: Reco
   });
 }
 
+export async function updateGenerationResultForUser(
+  generationId: string,
+  userId: string,
+  content: Record<string, unknown>,
+) {
+  const existing = await prisma.generationResult.findFirst({
+    where: {
+      id: generationId,
+      project: {
+        userId,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  return prisma.generationResult.update({
+    where: { id: generationId },
+    data: {
+      content: content as Prisma.InputJsonValue,
+    },
+  });
+}
+
 export async function writeUsageLog(input: {
   userId: string;
   projectId?: string;

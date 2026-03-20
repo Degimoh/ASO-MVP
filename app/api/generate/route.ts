@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { createGenerationResult, writeUsageLog } from "@/lib/repositories/generation-repository";
-import { getOrCreateDemoUser, getProjectById } from "@/lib/repositories/project-repository";
 import { generateAsoContent } from "@/lib/services/generation-service";
 import { generatePayloadSchema } from "@/lib/validations/project";
+import { requireApiUser } from "@/src/lib/auth/api";
+import { getProjectByIdForUser } from "@/src/lib/repositories/project.repository";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
-  const user = await getOrCreateDemoUser();
+  const auth = await requireApiUser();
+  if (!auth.user) {
+    return auth.unauthorizedResponse;
+  }
+  const user = auth.user;
 
   try {
     const body = await request.json();
@@ -19,7 +24,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const project = await getProjectById(parsed.data.projectId);
+    const project = await getProjectByIdForUser(parsed.data.projectId, user.id);
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });

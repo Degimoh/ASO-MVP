@@ -71,10 +71,15 @@ export type GenerationHistoryEntry = {
   content: Prisma.JsonValue;
 };
 
-export async function restoreGenerationVersionById(generationId: string) {
+export async function restoreGenerationVersionById(generationId: string, userId: string) {
   return prisma.$transaction(async (tx) => {
-    const source = await tx.generationResult.findUnique({
-      where: { id: generationId },
+    const source = await tx.generationResult.findFirst({
+      where: {
+        id: generationId,
+        project: {
+          userId,
+        },
+      },
       select: {
         id: true,
         projectId: true,

@@ -1,13 +1,15 @@
 import { AssetType, GenerationStatus, Platform, ProjectStatus } from "@prisma/client";
+import { hashPassword } from "../src/lib/auth/password";
 import { prisma } from "../src/lib/prisma";
 
 async function main() {
   const demoUser = await prisma.user.upsert({
     where: { email: "demo@aiaso.app" },
-    update: { name: "Demo User" },
+    update: { name: "Demo User", passwordHash: hashPassword("demo-password") },
     create: {
       email: "demo@aiaso.app",
       name: "Demo User",
+      passwordHash: hashPassword("demo-password"),
     },
   });
 

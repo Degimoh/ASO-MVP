@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeUsageLog } from "@/lib/repositories/generation-repository";
+import { requireApiUser } from "@/src/lib/auth/api";
 import { createVersionedGenerationResult } from "@/src/lib/repositories/generation.repository";
-import { getProjectById } from "@/src/lib/repositories/project.repository";
-import { getOrCreateDemoUser } from "@/src/lib/repositories/user.repository";
+import { getProjectByIdForUser } from "@/src/lib/repositories/project.repository";
 import { generateAppStoreDescription } from "@/src/lib/services/description-generation.service";
 import { generateKeywords } from "@/src/lib/services/keywords-generation.service";
 import { generateScreenshotCaptions } from "@/src/lib/services/captions-generation.service";
@@ -37,7 +37,11 @@ type GenerationResultPayload =
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
-  const user = await getOrCreateDemoUser();
+  const auth = await requireApiUser();
+  if (!auth.user) {
+    return auth.unauthorizedResponse;
+  }
+  const user = auth.user;
 
   try {
     const body = await request.json().catch(() => ({}));
@@ -53,7 +57,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const project = await getProjectById(parsedBody.data.projectId);
+    const project = await getProjectByIdForUser(parsedBody.data.projectId, user.id);
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });

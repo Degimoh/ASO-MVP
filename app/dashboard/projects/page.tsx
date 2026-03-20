@@ -3,8 +3,8 @@ import { Plus } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCurrentUserFromSession } from "@/src/lib/auth/session";
 import { listProjectCardsByUserId } from "@/src/lib/repositories/project.repository";
-import { getDemoUser } from "@/src/lib/repositories/user.repository";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export default async function ProjectsPage() {
   let loadError: string | null = null;
 
   try {
-    const user = await getDemoUser();
+    const user = await getCurrentUserFromSession();
     projects = user ? await listProjectCardsByUserId(user.id) : [];
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Unknown database error";

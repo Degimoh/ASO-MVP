@@ -2,10 +2,15 @@
 
 import { Bell, UserCircle2 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { Button } from "@/components/ui/button";
 import { getSectionMeta } from "@/components/dashboard/navigation";
 
-export function DashboardTopHeader() {
+type DashboardTopHeaderProps = {
+  userLabel: string;
+};
+
+export function DashboardTopHeader({ userLabel }: DashboardTopHeaderProps) {
   const pathname = usePathname();
   const section = getSectionMeta(pathname);
 
@@ -22,10 +27,11 @@ export function DashboardTopHeader() {
           <Button variant="ghost" size="sm" className="text-slate-600">
             <Bell className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button variant="outline" size="sm" className="gap-2" disabled>
             <UserCircle2 className="h-4 w-4" />
-            Demo Workspace
+            {userLabel}
           </Button>
+          <LogoutButton />
         </div>
       </div>
     </header>

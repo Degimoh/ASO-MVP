@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
 import { writeUsageLog } from "@/lib/repositories/generation-repository";
+import { requireApiUser } from "@/src/lib/auth/api";
 import { restoreGenerationVersionById } from "@/src/lib/repositories/generation.repository";
-import { getOrCreateDemoUser } from "@/src/lib/repositories/user.repository";
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ generationId: string }> },
 ) {
   const startedAt = Date.now();
-  const user = await getOrCreateDemoUser();
+  const auth = await requireApiUser();
+  if (!auth.user) {
+    return auth.unauthorizedResponse;
+  }
+  const user = auth.user;
   const { generationId } = await params;
 
   try {
-    const restored = await restoreGenerationVersionById(generationId);
+    const restored = await restoreGenerationVersionById(generationId, user.id);
 
     if (!restored) {
       return NextResponse.json({ error: "Generation version not found" }, { status: 404 });

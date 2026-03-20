@@ -1,5 +1,6 @@
 import { Platform, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { hashPassword } from "@/src/lib/auth/password";
 import { ProjectFormValues } from "@/types/aso";
 
 const projectInclude = {
@@ -12,10 +13,11 @@ type ProjectWithRelations = Prisma.ProjectGetPayload<{ include: typeof projectIn
 export async function getOrCreateDemoUser() {
   return prisma.user.upsert({
     where: { email: "demo@aiaso.app" },
-    update: {},
+    update: { passwordHash: hashPassword("demo-password") },
     create: {
       email: "demo@aiaso.app",
       name: "Demo User",
+      passwordHash: hashPassword("demo-password"),
     },
   });
 }

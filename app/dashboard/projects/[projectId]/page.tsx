@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProjectWorkspaceTabs, WorkspaceTabType } from "@/components/workspace/project-workspace-tabs";
-import { getProjectWorkspaceById } from "@/src/lib/repositories/project.repository";
+import { getCurrentUserFromSession } from "@/src/lib/auth/session";
+import { getProjectWorkspaceByIdForUser } from "@/src/lib/repositories/project.repository";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +32,17 @@ export default async function ProjectWorkspacePage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  let project: Awaited<ReturnType<typeof getProjectWorkspaceById>> = null;
+  let project: Awaited<ReturnType<typeof getProjectWorkspaceByIdForUser>> = null;
   let loadError: string | null = null;
 
   try {
-    project = await getProjectWorkspaceById(projectId);
+    const user = await getCurrentUserFromSession();
+
+    if (!user) {
+      loadError = "Unauthorized";
+    } else {
+      project = await getProjectWorkspaceByIdForUser(projectId, user.id);
+    }
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Unknown database error";
   }

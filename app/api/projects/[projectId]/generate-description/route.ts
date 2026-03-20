@@ -2,9 +2,9 @@ import { AssetType } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeUsageLog } from "@/lib/repositories/generation-repository";
-import { getDemoUser } from "@/src/lib/repositories/user.repository";
+import { requireApiUser } from "@/src/lib/auth/api";
 import { createVersionedGenerationResult } from "@/src/lib/repositories/generation.repository";
-import { getProjectById } from "@/src/lib/repositories/project.repository";
+import { getProjectByIdForUser } from "@/src/lib/repositories/project.repository";
 import { generateAppStoreDescription } from "@/src/lib/services/description-generation.service";
 import { OpenRouterServiceError } from "@/src/lib/services/openrouter.service";
 
@@ -19,7 +19,11 @@ export async function POST(
 ) {
   const startedAt = Date.now();
   const { projectId } = await params;
-  const user = await getDemoUser();
+  const auth = await requireApiUser();
+  if (!auth.user) {
+    return auth.unauthorizedResponse;
+  }
+  const user = auth.user;
 
   try {
     const body = await request.json().catch(() => ({}));
@@ -35,7 +39,7 @@ export async function POST(
       );
     }
 
-    const project = await getProjectById(projectId);
+    const project = await getProjectByIdForUser(projectId, user.id);
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });

@@ -81,9 +81,32 @@ export async function getProjectById(projectId: string): Promise<ProjectRecord |
   });
 }
 
+export async function getProjectByIdForUser(projectId: string, userId: string): Promise<ProjectRecord | null> {
+  return prisma.project.findFirst({
+    where: {
+      id: projectId,
+      userId,
+    },
+    include: projectWithRelations,
+  });
+}
+
 export async function getProjectWorkspaceById(projectId: string): Promise<ProjectWorkspaceRecord | null> {
   return prisma.project.findUnique({
     where: { id: projectId },
+    include: projectWorkspaceInclude,
+  });
+}
+
+export async function getProjectWorkspaceByIdForUser(
+  projectId: string,
+  userId: string,
+): Promise<ProjectWorkspaceRecord | null> {
+  return prisma.project.findFirst({
+    where: {
+      id: projectId,
+      userId,
+    },
     include: projectWorkspaceInclude,
   });
 }

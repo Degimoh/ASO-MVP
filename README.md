@@ -87,6 +87,12 @@ npm run dev
 
 Open http://localhost:3000.
 
+5. Sign in:
+
+- After running seed, use:
+  - Email: `demo@aiaso.app`
+  - Password: `demo-password`
+
 ## OpenRouter
 
 Set `OPENROUTER_API_KEY` in `.env` to use live generation.
