@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, History, RefreshCcw, WandSparkles } from "lucide-react";
+import { CheckCircle2, Copy, History, RefreshCcw, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,6 +89,17 @@ type VersionHistoryItem = {
 };
 
 const CAPTION_MAX_LENGTH = 70;
+const DESCRIPTION_MAX_CHARS = 4000;
+const UPDATE_NOTES_MAX_TITLE_CHARS = 80;
+const UPDATE_NOTES_MAX_NOTE_CHARS = 170;
+const UPDATE_NOTES_MAX_TOTAL_CHARS = 4000;
+const LOCALIZATION_MAX_CHARS = 6000;
+
+type DraftValidation = {
+  characterCount: number;
+  errors: string[];
+  warnings: string[];
+};
 
 function normalizeKeywordSeparators(value: string) {
   return value
@@ -120,6 +131,24 @@ function dedupeList(values: string[]) {
   }
 
   return output;
+}
+
+function findDuplicateCount(values: string[]) {
+  const seen = new Set<string>();
+  let duplicateCount = 0;
+
+  for (const value of values) {
+    const normalized = value.toLowerCase();
+
+    if (seen.has(normalized)) {
+      duplicateCount += 1;
+      continue;
+    }
+
+    seen.add(normalized);
+  }
+
+  return duplicateCount;
 }
 
 function parseKeywordsFromUnknown(value: unknown): string[] {
@@ -383,6 +412,186 @@ function normalizeInitialUpdateNotes(value: string | undefined): string {
   return trimmed;
 }
 
+function countStringLeaves(value: unknown): number {
+  if (typeof value === "string") {
+    return value.trim().length > 0 ? 1 : 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.reduce((total, entry) => total + countStringLeaves(entry), 0);
+  }
+
+  if (typeof value === "object" && value !== null) {
+    return Object.values(value).reduce((total, entry) => total + countStringLeaves(entry), 0);
+  }
+
+  return 0;
+}
+
+function validateDescriptionDraft(draft: string): DraftValidation {
+  const trimmed = draft.trim();
+  if (!trimmed) {
+    return { characterCount: 0, errors: [], warnings: [] };
+  }
+
+  const errors: string[] = [];
+  const parsed = parseDescriptionFromDraft(trimmed);
+  if (!parsed) {
+    return {
+      characterCount: trimmed.length,
+      errors: ["Description must be valid JSON with hook, body, features, cta, and fullText fields."],
+      warnings: [],
+    };
+  }
+
+  const hook = typeof parsed.hook === "string" ? parsed.hook.trim() : "";
+  const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
+  const cta = typeof parsed.cta === "string" ? parsed.cta.trim() : "";
+  const fullText = typeof parsed.fullText === "string" ? parsed.fullText.trim() : "";
+  const features = Array.isArray(parsed.features)
+    ? (parsed.features as unknown[])
+        .filter((feature): feature is string => typeof feature === "string")
+        .map((feature) => feature.trim())
+        .filter(Boolean)
+    : [];
+
+  if (!hook) errors.push("Missing hook text.");
+  if (!body) errors.push("Missing body text.");
+  if (!cta) errors.push("Missing CTA text.");
+  if (features.length === 0) errors.push("Include at least one feature.");
+  if (!fullText) errors.push("Missing fullText.");
+  if (fullText.length > DESCRIPTION_MAX_CHARS) {
+    errors.push(`fullText exceeds ${DESCRIPTION_MAX_CHARS} characters.`);
+  }
+
+  return {
+    characterCount: fullText.length || trimmed.length,
+    errors,
+    warnings: [],
+  };
+}
+
+function validateKeywordsDraft(draft: string): DraftValidation {
+  const trimmed = draft.trim();
+  if (!trimmed) {
+    return { characterCount: 0, errors: [], warnings: [] };
+  }
+
+  const rawTokens = tokenizeKeywords(trimmed);
+  const keywords = dedupeList(rawTokens);
+  const characterCount = keywords.join(",").length;
+  const duplicateCount = findDuplicateCount(rawTokens);
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (keywords.length === 0) {
+    errors.push("Add at least one keyword.");
+  }
+  if (characterCount > 100) {
+    errors.push("Keyword string exceeds the 100 character limit.");
+  }
+  if (duplicateCount > 0) {
+    warnings.push(`${duplicateCount} duplicate keyword(s) were detected.`);
+  }
+
+  return { characterCount, errors, warnings };
+}
+
+function validateCaptionsDraft(draft: string): DraftValidation {
+  const trimmed = draft.trim();
+  if (!trimmed) {
+    return { characterCount: 0, errors: [], warnings: [] };
+  }
+
+  const rawLines = trimmed
+    .split("\n")
+    .map(normalizeCaption)
+    .filter(Boolean);
+  const captions = dedupeList(rawLines);
+  const duplicateCount = findDuplicateCount(rawLines);
+  const overLimitCount = captions.filter((caption) => caption.length > CAPTION_MAX_LENGTH).length;
+  const characterCount = captions.reduce((total, caption) => total + caption.length, 0);
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (captions.length === 0) {
+    errors.push("Add at least one caption.");
+  }
+  if (overLimitCount > 0) {
+    errors.push(`${overLimitCount} caption(s) exceed ${CAPTION_MAX_LENGTH} characters.`);
+  }
+  if (duplicateCount > 0) {
+    warnings.push(`${duplicateCount} duplicate caption(s) were detected.`);
+  }
+
+  return { characterCount, errors, warnings };
+}
+
+function validateUpdateNotesDraft(draft: string): DraftValidation {
+  const trimmed = draft.trim();
+  if (!trimmed) {
+    return { characterCount: 0, errors: [], warnings: [] };
+  }
+
+  const parsed = parseUpdateNotesFromDraft(trimmed);
+  const errors: string[] = [];
+  const characterCount =
+    parsed.title.length + parsed.notes.reduce((total, note) => total + note.length, 0) + parsed.notes.length;
+
+  if (!parsed.title) errors.push("Update notes title is required.");
+  if (parsed.notes.length === 0) errors.push("Add at least one update note item.");
+  if (parsed.title.length > UPDATE_NOTES_MAX_TITLE_CHARS) {
+    errors.push(`Title exceeds ${UPDATE_NOTES_MAX_TITLE_CHARS} characters.`);
+  }
+  const longNotes = parsed.notes.filter((note) => note.length > UPDATE_NOTES_MAX_NOTE_CHARS).length;
+  if (longNotes > 0) {
+    errors.push(`${longNotes} note(s) exceed ${UPDATE_NOTES_MAX_NOTE_CHARS} characters.`);
+  }
+  if (characterCount > UPDATE_NOTES_MAX_TOTAL_CHARS) {
+    errors.push(`Update notes exceed ${UPDATE_NOTES_MAX_TOTAL_CHARS} characters total.`);
+  }
+
+  return { characterCount, errors, warnings: [] };
+}
+
+function validateLocalizationDraft(draft: string): DraftValidation {
+  const trimmed = draft.trim();
+  if (!trimmed) {
+    return { characterCount: 0, errors: [], warnings: [] };
+  }
+
+  const errors: string[] = [];
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(trimmed) as unknown;
+  } catch {
+    return {
+      characterCount: trimmed.length,
+      errors: ["Localization content must be valid JSON."],
+      warnings: [],
+    };
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    errors.push("Localization content must be a JSON object.");
+  }
+
+  const stringLeaves = countStringLeaves(parsed);
+  if (stringLeaves === 0) {
+    errors.push("Localization content should include at least one translated string.");
+  }
+  if (trimmed.length > LOCALIZATION_MAX_CHARS) {
+    errors.push(`Localization content exceeds ${LOCALIZATION_MAX_CHARS} characters.`);
+  }
+
+  return {
+    characterCount: trimmed.length,
+    errors,
+    warnings: [],
+  };
+}
+
 function computeKeywordsMeta(draft: string): KeywordsContentShape {
   const keywords = parseKeywordsFromDraft(draft);
   const characterCount = keywords.join(",").length;
@@ -445,6 +654,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   });
   const [isTabLoading, setIsTabLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [copySuccessMessage, setCopySuccessMessage] = useState<string | null>(null);
 
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
@@ -474,6 +684,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   } | null>(null);
 
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -487,6 +698,9 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     () => () => {
       if (loadingTimerRef.current) {
         clearTimeout(loadingTimerRef.current);
+      }
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
       }
     },
     [],
@@ -513,6 +727,11 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   const keywordsMeta = useMemo(() => computeKeywordsMeta(drafts.KEYWORDS), [drafts.KEYWORDS]);
   const captionsMeta = useMemo(() => computeCaptionsMeta(drafts.SCREENSHOT_CAPTIONS), [drafts.SCREENSHOT_CAPTIONS]);
   const updateNotesMeta = useMemo(() => parseUpdateNotesFromDraft(drafts.UPDATE_NOTES), [drafts.UPDATE_NOTES]);
+  const descriptionValidation = useMemo(() => validateDescriptionDraft(drafts.DESCRIPTION), [drafts.DESCRIPTION]);
+  const keywordsValidation = useMemo(() => validateKeywordsDraft(drafts.KEYWORDS), [drafts.KEYWORDS]);
+  const captionsValidation = useMemo(() => validateCaptionsDraft(drafts.SCREENSHOT_CAPTIONS), [drafts.SCREENSHOT_CAPTIONS]);
+  const updateNotesValidation = useMemo(() => validateUpdateNotesDraft(drafts.UPDATE_NOTES), [drafts.UPDATE_NOTES]);
+  const localizationValidation = useMemo(() => validateLocalizationDraft(drafts.LOCALIZATION), [drafts.LOCALIZATION]);
   const localizationSourceContent = useMemo(
     () =>
       buildLocalizationSourceContent({
@@ -538,6 +757,30 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     isGeneratingUpdateNotes ||
     isGeneratingLocalization ||
     restoringVersionId !== null;
+  const areGenerationButtonsDisabled = isAnyGenerationRunning || isTabLoading;
+  const activeValidation = useMemo(() => {
+    switch (activeTab) {
+      case "DESCRIPTION":
+        return descriptionValidation;
+      case "KEYWORDS":
+        return keywordsValidation;
+      case "SCREENSHOT_CAPTIONS":
+        return captionsValidation;
+      case "UPDATE_NOTES":
+        return updateNotesValidation;
+      case "LOCALIZATION":
+        return localizationValidation;
+      default:
+        return { characterCount: 0, errors: [], warnings: [] };
+    }
+  }, [
+    activeTab,
+    captionsValidation,
+    descriptionValidation,
+    keywordsValidation,
+    localizationValidation,
+    updateNotesValidation,
+  ]);
   const visibleVersionHistory = useMemo(() => {
     const filtered = versionHistory.filter((entry) => {
       if (entry.type !== activeTab) {
@@ -564,7 +807,16 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
 
     await navigator.clipboard.writeText(activeContent);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setCopySuccessMessage(`${activeLabel} copied to clipboard.`);
+
+    if (copyTimerRef.current) {
+      clearTimeout(copyTimerRef.current);
+    }
+
+    copyTimerRef.current = setTimeout(() => {
+      setCopied(false);
+      setCopySuccessMessage(null);
+    }, 1800);
   }
 
   async function handleRegenerateDescription() {
@@ -572,6 +824,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
 
     setDescriptionError(null);
     setCopied(false);
+    setCopySuccessMessage(null);
     setIsGeneratingDescription(true);
     setIsTabLoading(true);
 
@@ -628,6 +881,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   async function runKeywordsGeneration() {
     setKeywordsError(null);
     setCopied(false);
+    setCopySuccessMessage(null);
     setIsGeneratingKeywords(true);
     setIsTabLoading(true);
 
@@ -684,6 +938,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   async function runCaptionsGeneration() {
     setCaptionsError(null);
     setCopied(false);
+    setCopySuccessMessage(null);
     setIsGeneratingCaptions(true);
     setIsTabLoading(true);
 
@@ -740,6 +995,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   async function runUpdateNotesGeneration() {
     setUpdateNotesError(null);
     setCopied(false);
+    setCopySuccessMessage(null);
     setIsGeneratingUpdateNotes(true);
     setIsTabLoading(true);
 
@@ -804,6 +1060,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   async function runLocalizationGeneration() {
     setLocalizationError(null);
     setCopied(false);
+    setCopySuccessMessage(null);
 
     if (!targetLocale) {
       setLocalizationError("Select a target locale first");
@@ -879,6 +1136,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   async function runGenerateAll() {
     setGenerateAllNotice(null);
     setCopied(false);
+    setCopySuccessMessage(null);
     setDescriptionError(null);
     setKeywordsError(null);
     setCaptionsError(null);
@@ -1021,6 +1279,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
   async function handleRestoreVersion(generationId: string) {
     setRestoreError(null);
     setCopied(false);
+    setCopySuccessMessage(null);
     setRestoringVersionId(generationId);
     setIsTabLoading(true);
 
@@ -1072,6 +1331,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     if (nextTab === activeTab) return;
 
     setCopied(false);
+    setCopySuccessMessage(null);
     if (nextTab !== "DESCRIPTION") setDescriptionError(null);
     if (nextTab !== "KEYWORDS") setKeywordsError(null);
     if (nextTab !== "SCREENSHOT_CAPTIONS") setCaptionsError(null);
@@ -1102,7 +1362,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
         </div>
 
         <div className="flex justify-end">
-          <Button type="button" onClick={runGenerateAll} disabled={isAnyGenerationRunning}>
+          <Button type="button" onClick={runGenerateAll} disabled={areGenerationButtonsDisabled}>
             <WandSparkles className="mr-2 h-4 w-4" />
             {isGeneratingAll ? "Generating All..." : "Generate All"}
           </Button>
@@ -1148,7 +1408,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={isAnyGenerationRunning}
+                disabled={areGenerationButtonsDisabled}
                 onClick={handleRegenerateDescription}
               >
                 <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1162,7 +1422,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isAnyGenerationRunning || keywordsMeta.keywords.length > 0}
+                  disabled={areGenerationButtonsDisabled || keywordsMeta.keywords.length > 0}
                   onClick={runKeywordsGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -1172,7 +1432,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isAnyGenerationRunning}
+                  disabled={areGenerationButtonsDisabled}
                   onClick={runKeywordsGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1187,7 +1447,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isAnyGenerationRunning || captionsMeta.captions.length > 0}
+                  disabled={areGenerationButtonsDisabled || captionsMeta.captions.length > 0}
                   onClick={runCaptionsGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -1197,7 +1457,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isAnyGenerationRunning}
+                  disabled={areGenerationButtonsDisabled}
                   onClick={runCaptionsGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1224,7 +1484,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isAnyGenerationRunning || updateNotesMeta.notes.length > 0}
+                  disabled={areGenerationButtonsDisabled || updateNotesMeta.notes.length > 0}
                   onClick={runUpdateNotesGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -1234,7 +1494,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isAnyGenerationRunning}
+                  disabled={areGenerationButtonsDisabled}
                   onClick={runUpdateNotesGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1276,7 +1536,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isAnyGenerationRunning || !localizationSourceContent}
+                  disabled={areGenerationButtonsDisabled || !localizationSourceContent}
                   onClick={runLocalizationGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -1286,7 +1546,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isAnyGenerationRunning || !localizationSourceContent}
+                  disabled={areGenerationButtonsDisabled || !localizationSourceContent}
                   onClick={runLocalizationGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1333,6 +1593,37 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
         ) : null}
 
         {restoreError ? <p className="text-sm text-red-600">{restoreError}</p> : null}
+        {copySuccessMessage ? (
+          <p className="inline-flex items-center gap-1 text-xs text-green-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {copySuccessMessage}
+          </p>
+        ) : null}
+
+        {!isTabLoading ? (
+          <div className="text-xs text-slate-600">{activeValidation.characterCount} characters</div>
+        ) : null}
+
+        {activeValidation.errors.length > 0 && !isTabLoading ? (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <p className="font-medium">Please fix the following:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {activeValidation.errors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {activeValidation.warnings.length > 0 && !isTabLoading ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <ul className="list-disc space-y-0.5 pl-4">
+              {activeValidation.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {activeTab === "KEYWORDS" && !isTabLoading ? (
           <div className="text-xs text-slate-600">
@@ -1356,7 +1647,8 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
 
         {activeTab === "UPDATE_NOTES" && !isTabLoading ? (
           <div className="text-xs text-slate-600">
-            {updateNotesMeta.notes.length} notes · title {updateNotesMeta.title ? "set" : "missing"}
+            {updateNotesMeta.notes.length} notes · title {updateNotesMeta.title ? "set" : "missing"} ·{" "}
+            {updateNotesValidation.characterCount} / {UPDATE_NOTES_MAX_TOTAL_CHARS} chars
           </div>
         ) : null}
 
@@ -1364,12 +1656,20 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
           <div className="text-xs text-slate-600">
             Localizing <span className="font-medium">{localizationSourceAsset.replaceAll("_", " ")}</span> to{" "}
             <span className="font-medium">{targetLocale}</span>
-            {localizationSourceContent ? "" : " · source asset needs content first"}
+            {localizationSourceContent ? "" : " · source asset needs content first"} ·{" "}
+            {localizationValidation.characterCount} / {LOCALIZATION_MAX_CHARS} chars
+          </div>
+        ) : null}
+
+        {activeTab === "DESCRIPTION" && !isTabLoading ? (
+          <div className="text-xs text-slate-600">
+            Description content target: up to {DESCRIPTION_MAX_CHARS} chars in <span className="font-medium">fullText</span>.
           </div>
         ) : null}
 
         {isTabLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm text-slate-600">Loading {activeLabel.toLowerCase()} editor...</p>
             <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
             <div className="h-56 animate-pulse rounded-md bg-slate-100" />
           </div>
@@ -1379,14 +1679,14 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
               <Card className="border-dashed bg-slate-50">
                 <CardContent className="p-4 text-sm text-slate-600">
                   {activeTab === "KEYWORDS"
-                    ? "No keywords generated yet. Use Generate Keywords to create the first set."
+                    ? "No keywords yet. Generate a first set, then refine manually."
                     : activeTab === "SCREENSHOT_CAPTIONS"
-                      ? "No screenshot captions generated yet. Use Generate Captions to create the first set."
+                      ? "No captions yet. Generate marketing-friendly captions and edit inline."
                       : activeTab === "UPDATE_NOTES"
-                        ? "No update notes generated yet. Pick a mode and generate your first notes."
+                        ? "No update notes yet. Pick a release mode and generate a first draft."
                         : activeTab === "LOCALIZATION"
-                          ? "No localized content generated yet. Select source asset and locale, then generate."
-                        : "No content in this tab yet. Start writing manually or use regenerate when available."}
+                          ? "No localized content yet. Choose a source asset and target locale, then generate."
+                        : "No description yet. Generate one or paste a structured JSON draft to begin."}
                 </CardContent>
               </Card>
             ) : null}
@@ -1399,7 +1699,10 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   [activeTab]: event.target.value,
                 }))
               }
-              className="min-h-72 font-mono text-sm"
+              className={cn(
+                "min-h-72 font-mono text-sm",
+                activeValidation.errors.length > 0 ? "border-red-300 focus-visible:ring-red-500" : undefined,
+              )}
               placeholder={
                 activeTab === "KEYWORDS"
                   ? "keyword one, keyword two, keyword three"
@@ -1450,7 +1753,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                           type="button"
                           size="sm"
                           variant="ghost"
-                          disabled={isAnyGenerationRunning || isCurrent}
+                          disabled={areGenerationButtonsDisabled || isCurrent}
                           onClick={() => handleRestoreVersion(entry.id)}
                         >
                           {isRestoringThis ? "Restoring..." : isCurrent ? "Current" : "Restore"}
