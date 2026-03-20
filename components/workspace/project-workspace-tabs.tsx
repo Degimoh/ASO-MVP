@@ -401,6 +401,19 @@ function getApiErrorMessage(
   return body.error || body.details || fallback;
 }
 
+function buildGenerationTooltip(input: {
+  actionLabel: string;
+  cost: number;
+  balance: number;
+  canAfford: boolean;
+}) {
+  const affordability = input.canAfford
+    ? "Enough credits available."
+    : `Insufficient credits: need ${input.cost}, have ${input.balance}.`;
+
+  return `${input.actionLabel}\nCost formula: ${input.cost} credit(s) per run.\nCurrent balance: ${input.balance} credit(s).\n${affordability}`;
+}
+
 function normalizeInitialKeywords(value: string | undefined): string {
   if (!value) return "";
   const trimmed = value.trim();
@@ -808,6 +821,39 @@ export function ProjectWorkspaceTabs({
   const activeGenerationCost = ASSET_GENERATION_COSTS[activeTab];
   const canAffordActiveGeneration = walletBalance >= activeGenerationCost;
   const canAffordGenerateAll = walletBalance >= GENERATE_ALL_COST;
+  const generateAllTooltip = `Generate all assets (Description + Keywords + Screenshot Captions + Update Notes)\nCost formula: 3 + 1 + 2 + 1 = ${GENERATE_ALL_COST} credits.\nCurrent balance: ${walletBalance} credit(s).\n${
+    canAffordGenerateAll ? "Enough credits available." : `Insufficient credits: need ${GENERATE_ALL_COST}, have ${walletBalance}.`
+  }`;
+  const descriptionTooltip = buildGenerationTooltip({
+    actionLabel: "Generate App Store Description",
+    cost: ASSET_GENERATION_COSTS.DESCRIPTION,
+    balance: walletBalance,
+    canAfford: walletBalance >= ASSET_GENERATION_COSTS.DESCRIPTION,
+  });
+  const keywordsTooltip = buildGenerationTooltip({
+    actionLabel: "Generate Keywords",
+    cost: ASSET_GENERATION_COSTS.KEYWORDS,
+    balance: walletBalance,
+    canAfford: walletBalance >= ASSET_GENERATION_COSTS.KEYWORDS,
+  });
+  const captionsTooltip = buildGenerationTooltip({
+    actionLabel: "Generate Screenshot Captions",
+    cost: ASSET_GENERATION_COSTS.SCREENSHOT_CAPTIONS,
+    balance: walletBalance,
+    canAfford: walletBalance >= ASSET_GENERATION_COSTS.SCREENSHOT_CAPTIONS,
+  });
+  const updateNotesTooltip = buildGenerationTooltip({
+    actionLabel: "Generate Update Notes",
+    cost: ASSET_GENERATION_COSTS.UPDATE_NOTES,
+    balance: walletBalance,
+    canAfford: walletBalance >= ASSET_GENERATION_COSTS.UPDATE_NOTES,
+  });
+  const localizationTooltip = buildGenerationTooltip({
+    actionLabel: "Generate Localization",
+    cost: ASSET_GENERATION_COSTS.LOCALIZATION,
+    balance: walletBalance,
+    canAfford: walletBalance >= ASSET_GENERATION_COSTS.LOCALIZATION,
+  });
   const activeValidation = useMemo(() => {
     switch (activeTab) {
       case "DESCRIPTION":
@@ -1464,7 +1510,12 @@ export function ProjectWorkspaceTabs({
         </div>
 
         <div className="flex justify-end">
-          <Button type="button" onClick={runGenerateAll} disabled={areGenerationButtonsDisabled || !canAffordGenerateAll}>
+          <Button
+            type="button"
+            onClick={runGenerateAll}
+            disabled={areGenerationButtonsDisabled || !canAffordGenerateAll}
+            title={generateAllTooltip}
+          >
             <WandSparkles className="mr-2 h-4 w-4" />
             {isGeneratingAll ? "Generating All..." : "Generate All"}
           </Button>
@@ -1512,6 +1563,7 @@ export function ProjectWorkspaceTabs({
                 size="sm"
                 disabled={areGenerationButtonsDisabled || !canAffordActiveGeneration}
                 onClick={handleRegenerateDescription}
+                title={descriptionTooltip}
               >
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 {isGeneratingDescription ? "Generating..." : "Regenerate Description"}
@@ -1530,6 +1582,7 @@ export function ProjectWorkspaceTabs({
                     walletBalance < ASSET_GENERATION_COSTS.KEYWORDS
                   }
                   onClick={runKeywordsGeneration}
+                  title={keywordsTooltip}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
                   {isGeneratingKeywords ? "Generating..." : "Generate Keywords"}
@@ -1540,6 +1593,7 @@ export function ProjectWorkspaceTabs({
                   size="sm"
                   disabled={areGenerationButtonsDisabled || walletBalance < ASSET_GENERATION_COSTS.KEYWORDS}
                   onClick={runKeywordsGeneration}
+                  title={keywordsTooltip}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
                   {isGeneratingKeywords ? "Regenerating..." : "Regenerate Keywords"}
@@ -1559,6 +1613,7 @@ export function ProjectWorkspaceTabs({
                     walletBalance < ASSET_GENERATION_COSTS.SCREENSHOT_CAPTIONS
                   }
                   onClick={runCaptionsGeneration}
+                  title={captionsTooltip}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
                   {isGeneratingCaptions ? "Generating..." : "Generate Captions"}
@@ -1569,6 +1624,7 @@ export function ProjectWorkspaceTabs({
                   size="sm"
                   disabled={areGenerationButtonsDisabled || walletBalance < ASSET_GENERATION_COSTS.SCREENSHOT_CAPTIONS}
                   onClick={runCaptionsGeneration}
+                  title={captionsTooltip}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
                   {isGeneratingCaptions ? "Regenerating..." : "Regenerate Captions"}
@@ -1600,6 +1656,7 @@ export function ProjectWorkspaceTabs({
                     walletBalance < ASSET_GENERATION_COSTS.UPDATE_NOTES
                   }
                   onClick={runUpdateNotesGeneration}
+                  title={updateNotesTooltip}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
                   {isGeneratingUpdateNotes ? "Generating..." : "Generate Update Notes"}
@@ -1610,6 +1667,7 @@ export function ProjectWorkspaceTabs({
                   size="sm"
                   disabled={areGenerationButtonsDisabled || walletBalance < ASSET_GENERATION_COSTS.UPDATE_NOTES}
                   onClick={runUpdateNotesGeneration}
+                  title={updateNotesTooltip}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
                   {isGeneratingUpdateNotes ? "Regenerating..." : "Regenerate Update Notes"}
@@ -1656,6 +1714,7 @@ export function ProjectWorkspaceTabs({
                     walletBalance < ASSET_GENERATION_COSTS.LOCALIZATION
                   }
                   onClick={runLocalizationGeneration}
+                  title={localizationTooltip}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
                   {isGeneratingLocalization ? "Generating..." : "Generate Localization"}
@@ -1670,6 +1729,7 @@ export function ProjectWorkspaceTabs({
                     walletBalance < ASSET_GENERATION_COSTS.LOCALIZATION
                   }
                   onClick={runLocalizationGeneration}
+                  title={localizationTooltip}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
                   {isGeneratingLocalization ? "Regenerating..." : "Regenerate Localization"}
