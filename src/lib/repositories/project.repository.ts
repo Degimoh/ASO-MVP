@@ -5,9 +5,18 @@ const projectWithRelations = {
   features: { orderBy: { sortOrder: "asc" as const } },
   locales: { orderBy: { code: "asc" as const } },
 } satisfies Prisma.ProjectInclude;
+const projectWorkspaceInclude = {
+  ...projectWithRelations,
+  generationResults: {
+    orderBy: [{ generatedAt: "desc" as const }, { version: "desc" as const }],
+  },
+} satisfies Prisma.ProjectInclude;
 
 export type ProjectRecord = Prisma.ProjectGetPayload<{
   include: typeof projectWithRelations;
+}>;
+export type ProjectWorkspaceRecord = Prisma.ProjectGetPayload<{
+  include: typeof projectWorkspaceInclude;
 }>;
 
 export type ProjectCardRecord = Prisma.ProjectGetPayload<{
@@ -69,6 +78,13 @@ export async function getProjectById(projectId: string): Promise<ProjectRecord |
   return prisma.project.findUnique({
     where: { id: projectId },
     include: projectWithRelations,
+  });
+}
+
+export async function getProjectWorkspaceById(projectId: string): Promise<ProjectWorkspaceRecord | null> {
+  return prisma.project.findUnique({
+    where: { id: projectId },
+    include: projectWorkspaceInclude,
   });
 }
 
