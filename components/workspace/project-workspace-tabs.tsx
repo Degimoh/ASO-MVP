@@ -46,6 +46,7 @@ type Props = {
   availableLocales: string[];
   initialContent: Partial<Record<WorkspaceTabType, string>>;
   initialVersionHistory: VersionHistoryItem[];
+  initialWalletBalance: number;
 };
 
 type KeywordsContentShape = {
@@ -72,6 +73,8 @@ type GenerateAllAssetResponse =
       locale: string | null;
       model: string;
       generatedAt: string;
+      creditsCharged: number;
+      walletBalanceAfter: number;
       content: Record<string, unknown>;
     }
   | {
@@ -94,6 +97,18 @@ const UPDATE_NOTES_MAX_TITLE_CHARS = 80;
 const UPDATE_NOTES_MAX_NOTE_CHARS = 170;
 const UPDATE_NOTES_MAX_TOTAL_CHARS = 4000;
 const LOCALIZATION_MAX_CHARS = 6000;
+const ASSET_GENERATION_COSTS: Record<WorkspaceTabType, number> = {
+  DESCRIPTION: 3,
+  KEYWORDS: 1,
+  SCREENSHOT_CAPTIONS: 2,
+  UPDATE_NOTES: 1,
+  LOCALIZATION: 2,
+};
+const GENERATE_ALL_COST =
+  ASSET_GENERATION_COSTS.DESCRIPTION +
+  ASSET_GENERATION_COSTS.KEYWORDS +
+  ASSET_GENERATION_COSTS.SCREENSHOT_CAPTIONS +
+  ASSET_GENERATION_COSTS.UPDATE_NOTES;
 
 type DraftValidation = {
   characterCount: number;
@@ -359,6 +374,31 @@ function formatDraftForTab(tab: WorkspaceTabType, content: unknown): string {
   }
 
   return JSON.stringify(content, null, 2);
+}
+
+function getApiErrorMessage(
+  body: {
+    error?: string;
+    details?: string;
+    code?: string;
+    requiredCredits?: number;
+    availableCredits?: number;
+  },
+  fallback: string,
+) {
+  if (body.code === "INSUFFICIENT_CREDITS") {
+    if (body.details) {
+      return body.details;
+    }
+
+    if (typeof body.requiredCredits === "number" && typeof body.availableCredits === "number") {
+      return `You need ${body.requiredCredits} credits but only have ${body.availableCredits}.`;
+    }
+
+    return "Insufficient credits";
+  }
+
+  return body.error || body.details || fallback;
 }
 
 function normalizeInitialKeywords(value: string | undefined): string {
@@ -643,7 +683,13 @@ function buildLocalizationSourceContent(input: {
   }
 }
 
-export function ProjectWorkspaceTabs({ projectId, availableLocales, initialContent, initialVersionHistory }: Props) {
+export function ProjectWorkspaceTabs({
+  projectId,
+  availableLocales,
+  initialContent,
+  initialVersionHistory,
+  initialWalletBalance,
+}: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTabType>("DESCRIPTION");
   const [drafts, setDrafts] = useState<Record<WorkspaceTabType, string>>({
     DESCRIPTION: initialContent.DESCRIPTION || "",
@@ -675,6 +721,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     useState<LocalizableSourceAssetType>("DESCRIPTION");
   const [targetLocale, setTargetLocale] = useState<string>(availableLocales[0] || "en-US");
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(initialWalletBalance);
   const [versionHistory, setVersionHistory] = useState<VersionHistoryItem[]>(initialVersionHistory);
   const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -758,6 +805,9 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
     isGeneratingLocalization ||
     restoringVersionId !== null;
   const areGenerationButtonsDisabled = isAnyGenerationRunning || isTabLoading;
+  const activeGenerationCost = ASSET_GENERATION_COSTS[activeTab];
+  const canAffordActiveGeneration = walletBalance >= activeGenerationCost;
+  const canAffordGenerateAll = walletBalance >= GENERATE_ALL_COST;
   const activeValidation = useMemo(() => {
     switch (activeTab) {
       case "DESCRIPTION":
@@ -838,18 +888,22 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
+        code?: string;
+        requiredCredits?: number;
+        availableCredits?: number;
         data?: {
           generationId?: string;
           version?: number;
           model?: string;
           locale?: string | null;
           generatedAt?: string;
+          walletBalanceAfter?: number;
           content?: Record<string, unknown>;
         };
       };
 
       if (!response.ok || !body.data?.content) {
-        throw new Error(body.error || body.details || "Failed to generate description");
+        throw new Error(getApiErrorMessage(body, "Failed to generate description"));
       }
       const descriptionContent = body.data.content;
 
@@ -869,6 +923,9 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
               ? (body.data as { generatedAt: string }).generatedAt
               : new Date().toISOString(),
         });
+      }
+      if (typeof body.data?.walletBalanceAfter === "number") {
+        setWalletBalance(body.data.walletBalanceAfter);
       }
     } catch (error) {
       setDescriptionError(error instanceof Error ? error.message : "Failed to generate description");
@@ -895,18 +952,22 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
+        code?: string;
+        requiredCredits?: number;
+        availableCredits?: number;
         data?: {
           generationId?: string;
           version?: number;
           model?: string;
           locale?: string | null;
           generatedAt?: string;
+          walletBalanceAfter?: number;
           content?: { keywords?: string[] };
         };
       };
 
       if (!response.ok || !body.data?.content?.keywords) {
-        throw new Error(body.error || body.details || "Failed to generate keywords");
+        throw new Error(getApiErrorMessage(body, "Failed to generate keywords"));
       }
       const keywordItems = body.data.content.keywords;
 
@@ -926,6 +987,9 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
               ? (body.data as { generatedAt: string }).generatedAt
               : new Date().toISOString(),
         });
+      }
+      if (typeof body.data?.walletBalanceAfter === "number") {
+        setWalletBalance(body.data.walletBalanceAfter);
       }
     } catch (error) {
       setKeywordsError(error instanceof Error ? error.message : "Failed to generate keywords");
@@ -952,18 +1016,22 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
+        code?: string;
+        requiredCredits?: number;
+        availableCredits?: number;
         data?: {
           generationId?: string;
           version?: number;
           model?: string;
           locale?: string | null;
           generatedAt?: string;
+          walletBalanceAfter?: number;
           content?: { captions?: string[] };
         };
       };
 
       if (!response.ok || !body.data?.content?.captions) {
-        throw new Error(body.error || body.details || "Failed to generate screenshot captions");
+        throw new Error(getApiErrorMessage(body, "Failed to generate screenshot captions"));
       }
       const captionItems = body.data.content.captions;
 
@@ -983,6 +1051,9 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
               ? (body.data as { generatedAt: string }).generatedAt
               : new Date().toISOString(),
         });
+      }
+      if (typeof body.data?.walletBalanceAfter === "number") {
+        setWalletBalance(body.data.walletBalanceAfter);
       }
     } catch (error) {
       setCaptionsError(error instanceof Error ? error.message : "Failed to generate screenshot captions");
@@ -1012,18 +1083,22 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
+        code?: string;
+        requiredCredits?: number;
+        availableCredits?: number;
         data?: {
           generationId?: string;
           version?: number;
           model?: string;
           locale?: string | null;
           generatedAt?: string;
+          walletBalanceAfter?: number;
           content?: { title?: string; notes?: string[] };
         };
       };
 
       if (!response.ok || !body.data?.content) {
-        throw new Error(body.error || body.details || "Failed to generate update notes");
+        throw new Error(getApiErrorMessage(body, "Failed to generate update notes"));
       }
       const updateNotesContent = body.data.content;
 
@@ -1048,6 +1123,9 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
               ? (body.data as { generatedAt: string }).generatedAt
               : new Date().toISOString(),
         });
+      }
+      if (typeof body.data?.walletBalanceAfter === "number") {
+        setWalletBalance(body.data.walletBalanceAfter);
       }
     } catch (error) {
       setUpdateNotesError(error instanceof Error ? error.message : "Failed to generate update notes");
@@ -1090,18 +1168,22 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
+        code?: string;
+        requiredCredits?: number;
+        availableCredits?: number;
         data?: {
           generationId?: string;
           version?: number;
           model?: string;
           locale?: string | null;
           generatedAt?: string;
+          walletBalanceAfter?: number;
           content?: Record<string, unknown>;
         };
       };
 
       if (!response.ok || !body.data?.content) {
-        throw new Error(body.error || body.details || "Failed to generate localization");
+        throw new Error(getApiErrorMessage(body, "Failed to generate localization"));
       }
       const localizedContent = body.data.content;
 
@@ -1124,6 +1206,9 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
               ? (body.data as { generatedAt: string }).generatedAt
               : new Date().toISOString(),
         });
+      }
+      if (typeof body.data?.walletBalanceAfter === "number") {
+        setWalletBalance(body.data.walletBalanceAfter);
       }
     } catch (error) {
       setLocalizationError(error instanceof Error ? error.message : "Failed to generate localization");
@@ -1158,6 +1243,9 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       const body = (await response.json()) as {
         error?: string;
         details?: string;
+        code?: string;
+        requiredCredits?: number;
+        availableCredits?: number;
         data?: {
           assets?: {
             description?: GenerateAllAssetResponse;
@@ -1168,12 +1256,13 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
           summary?: {
             successCount?: number;
             failureCount?: number;
+            chargedCredits?: number;
           };
         };
       };
 
       if (!response.ok || !body.data?.assets) {
-        throw new Error(body.error || body.details || "Generate all failed");
+        throw new Error(getApiErrorMessage(body, "Generate all failed"));
       }
 
       const assets = body.data.assets;
@@ -1252,17 +1341,30 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
       newHistoryEntries.forEach(appendVersionHistory);
 
       const summary = body.data.summary;
+      const successfulAssets = Object.values(assets).filter(
+        (asset): asset is Extract<GenerateAllAssetResponse, { status: "success" }> => asset?.status === "success",
+      );
+      if (successfulAssets.length > 0) {
+        const minBalanceAfter = successfulAssets.reduce(
+          (min, asset) => Math.min(min, asset.walletBalanceAfter),
+          successfulAssets[0].walletBalanceAfter,
+        );
+        setWalletBalance(minBalanceAfter);
+      }
+
       if (failures.length === 0) {
         setGenerateAllNotice({
           type: "success",
-          message: `Generated all assets successfully (${summary?.successCount ?? 4}/4).`,
+          message: `Generated all assets successfully (${summary?.successCount ?? 4}/4). Charged ${
+            summary?.chargedCredits ?? 0
+          } credits.`,
         });
       } else {
         setGenerateAllNotice({
           type: "partial",
           message: `Generate all completed with partial errors (${summary?.successCount ?? 0} success, ${
             summary?.failureCount ?? failures.length
-          } failed). ${failures.join(" | ")}`,
+          } failed). Charged ${summary?.chargedCredits ?? 0} credits. ${failures.join(" | ")}`,
         });
       }
     } catch (error) {
@@ -1362,7 +1464,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
         </div>
 
         <div className="flex justify-end">
-          <Button type="button" onClick={runGenerateAll} disabled={areGenerationButtonsDisabled}>
+          <Button type="button" onClick={runGenerateAll} disabled={areGenerationButtonsDisabled || !canAffordGenerateAll}>
             <WandSparkles className="mr-2 h-4 w-4" />
             {isGeneratingAll ? "Generating All..." : "Generate All"}
           </Button>
@@ -1408,7 +1510,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={areGenerationButtonsDisabled}
+                disabled={areGenerationButtonsDisabled || !canAffordActiveGeneration}
                 onClick={handleRegenerateDescription}
               >
                 <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1422,7 +1524,11 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={areGenerationButtonsDisabled || keywordsMeta.keywords.length > 0}
+                  disabled={
+                    areGenerationButtonsDisabled ||
+                    keywordsMeta.keywords.length > 0 ||
+                    walletBalance < ASSET_GENERATION_COSTS.KEYWORDS
+                  }
                   onClick={runKeywordsGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -1432,7 +1538,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={areGenerationButtonsDisabled}
+                  disabled={areGenerationButtonsDisabled || walletBalance < ASSET_GENERATION_COSTS.KEYWORDS}
                   onClick={runKeywordsGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1447,7 +1553,11 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={areGenerationButtonsDisabled || captionsMeta.captions.length > 0}
+                  disabled={
+                    areGenerationButtonsDisabled ||
+                    captionsMeta.captions.length > 0 ||
+                    walletBalance < ASSET_GENERATION_COSTS.SCREENSHOT_CAPTIONS
+                  }
                   onClick={runCaptionsGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -1457,7 +1567,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={areGenerationButtonsDisabled}
+                  disabled={areGenerationButtonsDisabled || walletBalance < ASSET_GENERATION_COSTS.SCREENSHOT_CAPTIONS}
                   onClick={runCaptionsGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1484,7 +1594,11 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={areGenerationButtonsDisabled || updateNotesMeta.notes.length > 0}
+                  disabled={
+                    areGenerationButtonsDisabled ||
+                    updateNotesMeta.notes.length > 0 ||
+                    walletBalance < ASSET_GENERATION_COSTS.UPDATE_NOTES
+                  }
                   onClick={runUpdateNotesGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -1494,7 +1608,7 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={areGenerationButtonsDisabled}
+                  disabled={areGenerationButtonsDisabled || walletBalance < ASSET_GENERATION_COSTS.UPDATE_NOTES}
                   onClick={runUpdateNotesGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1536,7 +1650,11 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={areGenerationButtonsDisabled || !localizationSourceContent}
+                  disabled={
+                    areGenerationButtonsDisabled ||
+                    !localizationSourceContent ||
+                    walletBalance < ASSET_GENERATION_COSTS.LOCALIZATION
+                  }
                   onClick={runLocalizationGeneration}
                 >
                   <WandSparkles className="mr-2 h-4 w-4" />
@@ -1546,7 +1664,11 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={areGenerationButtonsDisabled || !localizationSourceContent}
+                  disabled={
+                    areGenerationButtonsDisabled ||
+                    !localizationSourceContent ||
+                    walletBalance < ASSET_GENERATION_COSTS.LOCALIZATION
+                  }
                   onClick={runLocalizationGeneration}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" />
@@ -1597,6 +1719,32 @@ export function ProjectWorkspaceTabs({ projectId, availableLocales, initialConte
           <p className="inline-flex items-center gap-1 text-xs text-green-700">
             <CheckCircle2 className="h-3.5 w-3.5" />
             {copySuccessMessage}
+          </p>
+        ) : null}
+
+        {!isTabLoading ? (
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+            <span>
+              Wallet balance: <span className="font-medium text-slate-900">{walletBalance}</span> credits
+            </span>
+            <span>
+              Current action cost: <span className="font-medium text-slate-900">{activeGenerationCost}</span> credits
+            </span>
+            <span>
+              Generate All cost: <span className="font-medium text-slate-900">{GENERATE_ALL_COST}</span> credits
+            </span>
+          </div>
+        ) : null}
+
+        {!isTabLoading && !canAffordActiveGeneration ? (
+          <p className="text-xs text-red-600">
+            Not enough credits for this generation action. Add credits in Settings to continue.
+          </p>
+        ) : null}
+
+        {!isTabLoading && !canAffordGenerateAll ? (
+          <p className="text-xs text-amber-700">
+            Generate All is disabled because your balance is below {GENERATE_ALL_COST} credits.
           </p>
         ) : null}
 

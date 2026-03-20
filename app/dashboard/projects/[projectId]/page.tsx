@@ -33,15 +33,16 @@ export default async function ProjectWorkspacePage({
 }) {
   const { projectId } = await params;
   let project: Awaited<ReturnType<typeof getProjectWorkspaceByIdForUser>> = null;
+  let authUser: Awaited<ReturnType<typeof getCurrentUserFromSession>> = null;
   let loadError: string | null = null;
 
   try {
-    const user = await getCurrentUserFromSession();
+    authUser = await getCurrentUserFromSession();
 
-    if (!user) {
+    if (!authUser) {
       loadError = "Unauthorized";
     } else {
-      project = await getProjectWorkspaceByIdForUser(projectId, user.id);
+      project = await getProjectWorkspaceByIdForUser(projectId, authUser.id);
     }
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Unknown database error";
@@ -188,6 +189,7 @@ export default async function ProjectWorkspacePage({
             availableLocales={project.locales.map((locale) => locale.code)}
             initialContent={initialContent}
             initialVersionHistory={initialVersionHistory}
+            initialWalletBalance={authUser?.walletBalance ?? 0}
           />
           <div className="mt-3 text-xs text-slate-500">
             Individual generators and Generate All are connected with partial-error handling.
