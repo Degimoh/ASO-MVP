@@ -33,6 +33,13 @@ type KeywordsContentShape = {
   withinLimit: boolean;
 };
 
+type CaptionsContentShape = {
+  captions: string[];
+  overLimitCount: number;
+};
+
+const CAPTION_MAX_LENGTH = 70;
+
 function normalizeKeywordSeparators(value: string) {
   return value
     .replace(/[;|\n\r\t]+/g, ",")
@@ -47,19 +54,19 @@ function tokenizeKeywords(value: string) {
     .filter(Boolean);
 }
 
-function dedupeKeywords(keywords: string[]) {
+function dedupeList(values: string[]) {
   const seen = new Set<string>();
   const output: string[] = [];
 
-  for (const keyword of keywords) {
-    const normalized = keyword.toLowerCase();
+  for (const value of values) {
+    const normalized = value.toLowerCase();
 
     if (seen.has(normalized)) {
       continue;
     }
 
     seen.add(normalized);
-    output.push(keyword);
+    output.push(value);
   }
 
   return output;
@@ -67,7 +74,7 @@ function dedupeKeywords(keywords: string[]) {
 
 function parseKeywordsFromUnknown(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return dedupeKeywords(
+    return dedupeList(
       value
         .filter((item): item is string => typeof item === "string")
         .flatMap((item) => tokenizeKeywords(item)),
@@ -75,7 +82,7 @@ function parseKeywordsFromUnknown(value: unknown): string[] {
   }
 
   if (typeof value === "string") {
-    return dedupeKeywords(tokenizeKeywords(value));
+    return dedupeList(tokenizeKeywords(value));
   }
 
   return [];
@@ -97,11 +104,60 @@ function parseKeywordsFromDraft(draft: string): string[] {
     // Fall through to raw text parsing.
   }
 
-  return dedupeKeywords(tokenizeKeywords(trimmed));
+  return dedupeList(tokenizeKeywords(trimmed));
 }
 
-function formatKeywordsForEditor(value: unknown): string {
-  return parseKeywordsFromUnknown(value).join(", ");
+function normalizeCaption(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function parseCaptionsFromUnknown(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return dedupeList(
+    value
+      .flatMap((item) => {
+        if (typeof item === "string") {
+          return [normalizeCaption(item)];
+        }
+
+        if (typeof item === "object" && item !== null && "caption" in item) {
+          const caption = (item as { caption?: unknown }).caption;
+          if (typeof caption === "string") {
+            return [normalizeCaption(caption)];
+          }
+        }
+
+        return [] as string[];
+      })
+      .filter(Boolean),
+  );
+}
+
+function parseCaptionsFromDraft(draft: string): string[] {
+  const trimmed = draft.trim();
+
+  if (!trimmed) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (typeof parsed === "object" && parsed !== null && "captions" in parsed) {
+      return parseCaptionsFromUnknown((parsed as { captions?: unknown }).captions);
+    }
+  } catch {
+    // Fall through to line parsing.
+  }
+
+  return dedupeList(
+    trimmed
+      .split("\n")
+      .map(normalizeCaption)
+      .filter(Boolean),
+  );
 }
 
 function normalizeInitialKeywords(value: string | undefined): string {
@@ -110,7 +166,6 @@ function normalizeInitialKeywords(value: string | undefined): string {
   }
 
   const trimmed = value.trim();
-
   if (!trimmed) {
     return "";
   }
@@ -118,7 +173,29 @@ function normalizeInitialKeywords(value: string | undefined): string {
   try {
     const parsed = JSON.parse(trimmed) as unknown;
     if (typeof parsed === "object" && parsed !== null && "keywords" in parsed) {
-      return formatKeywordsForEditor((parsed as { keywords?: unknown }).keywords);
+      return parseKeywordsFromUnknown((parsed as { keywords?: unknown }).keywords).join(", ");
+    }
+  } catch {
+    // Keep draft as-is.
+  }
+
+  return trimmed;
+}
+
+function normalizeInitialCaptions(value: string | undefined): string {
+  if (!value) {
+    return "";
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (typeof parsed === "object" && parsed !== null && "captions" in parsed) {
+      return parseCaptionsFromUnknown((parsed as { captions?: unknown }).captions).join("\n");
     }
   } catch {
     // Keep draft as-is.
@@ -138,12 +215,22 @@ function computeKeywordsMeta(draft: string): KeywordsContentShape {
   };
 }
 
+function computeCaptionsMeta(draft: string): CaptionsContentShape {
+  const captions = parseCaptionsFromDraft(draft);
+  const overLimitCount = captions.filter((caption) => caption.length > CAPTION_MAX_LENGTH).length;
+
+  return {
+    captions,
+    overLimitCount,
+  };
+}
+
 export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
   const [activeTab, setActiveTab] = useState<WorkspaceTabType>("DESCRIPTION");
   const [drafts, setDrafts] = useState<Record<WorkspaceTabType, string>>({
     DESCRIPTION: initialContent.DESCRIPTION || "",
     KEYWORDS: normalizeInitialKeywords(initialContent.KEYWORDS),
-    SCREENSHOT_CAPTIONS: initialContent.SCREENSHOT_CAPTIONS || "",
+    SCREENSHOT_CAPTIONS: normalizeInitialCaptions(initialContent.SCREENSHOT_CAPTIONS),
     UPDATE_NOTES: initialContent.UPDATE_NOTES || "",
     LOCALIZATION: initialContent.LOCALIZATION || "",
   });
@@ -153,6 +240,8 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
   const [keywordsError, setKeywordsError] = useState<string | null>(null);
+  const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
+  const [captionsError, setCaptionsError] = useState<string | null>(null);
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -180,6 +269,7 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
   const activeContent = drafts[activeTab];
   const isEmpty = activeContent.trim().length === 0;
   const keywordsMeta = useMemo(() => computeKeywordsMeta(drafts.KEYWORDS), [drafts.KEYWORDS]);
+  const captionsMeta = useMemo(() => computeCaptionsMeta(drafts.SCREENSHOT_CAPTIONS), [drafts.SCREENSHOT_CAPTIONS]);
 
   async function handleCopy() {
     if (isEmpty || isTabLoading) return;
@@ -249,8 +339,6 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
         data?: {
           content?: {
             keywords?: string[];
-            characterCount?: number;
-            withinLimit?: boolean;
           };
         };
       };
@@ -273,6 +361,47 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
     }
   }
 
+  async function runCaptionsGeneration() {
+    setCaptionsError(null);
+    setCopied(false);
+    setIsGeneratingCaptions(true);
+    setIsTabLoading(true);
+
+    try {
+      const response = await fetch("/api/generate/captions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      });
+
+      const body = (await response.json()) as {
+        error?: string;
+        details?: string;
+        data?: {
+          content?: {
+            captions?: string[];
+          };
+        };
+      };
+
+      if (!response.ok || !body.data?.content?.captions) {
+        throw new Error(body.error || body.details || "Failed to generate screenshot captions");
+      }
+
+      const normalizedCaptions = parseCaptionsFromUnknown(body.data.content.captions);
+
+      setDrafts((prev) => ({
+        ...prev,
+        SCREENSHOT_CAPTIONS: normalizedCaptions.join("\n"),
+      }));
+    } catch (error) {
+      setCaptionsError(error instanceof Error ? error.message : "Failed to generate screenshot captions");
+    } finally {
+      setIsGeneratingCaptions(false);
+      setIsTabLoading(false);
+    }
+  }
+
   function handleTabChange(nextTab: WorkspaceTabType) {
     if (nextTab === activeTab) {
       return;
@@ -284,6 +413,9 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
     }
     if (nextTab !== "KEYWORDS") {
       setKeywordsError(null);
+    }
+    if (nextTab !== "SCREENSHOT_CAPTIONS") {
+      setCaptionsError(null);
     }
     setIsTabLoading(true);
     setActiveTab(nextTab);
@@ -303,7 +435,7 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
         <div>
           <CardTitle>Generated Assets</CardTitle>
           <CardDescription>
-            Switch between tabs, edit content, and copy output. Description + Keywords generation are connected.
+            Switch between tabs, edit content, and copy output. Description, Keywords, and Screenshot Captions are connected.
           </CardDescription>
         </div>
 
@@ -373,7 +505,32 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
               </>
             ) : null}
 
-            {activeTab !== "DESCRIPTION" && activeTab !== "KEYWORDS" ? (
+            {activeTab === "SCREENSHOT_CAPTIONS" ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingCaptions || captionsMeta.captions.length > 0}
+                  onClick={runCaptionsGeneration}
+                >
+                  <WandSparkles className="mr-2 h-4 w-4" />
+                  {isGeneratingCaptions ? "Generating..." : "Generate Captions"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGeneratingCaptions}
+                  onClick={runCaptionsGeneration}
+                >
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  {isGeneratingCaptions ? "Regenerating..." : "Regenerate Captions"}
+                </Button>
+              </>
+            ) : null}
+
+            {activeTab !== "DESCRIPTION" && activeTab !== "KEYWORDS" && activeTab !== "SCREENSHOT_CAPTIONS" ? (
               <Button type="button" variant="outline" size="sm" disabled>
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Regenerate (soon)
@@ -390,11 +547,26 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
           <p className="text-sm text-red-600">{keywordsError}</p>
         ) : null}
 
+        {captionsError && activeTab === "SCREENSHOT_CAPTIONS" ? (
+          <p className="text-sm text-red-600">{captionsError}</p>
+        ) : null}
+
         {activeTab === "KEYWORDS" && !isTabLoading ? (
           <div className="text-xs text-slate-600">
-            {keywordsMeta.keywords.length} keywords · {keywordsMeta.characterCount} / 100 characters · {" "}
+            {keywordsMeta.keywords.length} keywords · {keywordsMeta.characterCount} / 100 characters ·{" "}
             <span className={keywordsMeta.withinLimit ? "text-green-700" : "text-red-600"}>
               {keywordsMeta.withinLimit ? "Within limit" : "Over limit"}
+            </span>
+          </div>
+        ) : null}
+
+        {activeTab === "SCREENSHOT_CAPTIONS" && !isTabLoading ? (
+          <div className="text-xs text-slate-600">
+            {captionsMeta.captions.length} captions · max {CAPTION_MAX_LENGTH} chars each ·{" "}
+            <span className={captionsMeta.overLimitCount === 0 ? "text-green-700" : "text-red-600"}>
+              {captionsMeta.overLimitCount === 0
+                ? "All captions within limit"
+                : `${captionsMeta.overLimitCount} caption(s) exceed limit`}
             </span>
           </div>
         ) : null}
@@ -411,7 +583,9 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
                 <CardContent className="p-4 text-sm text-slate-600">
                   {activeTab === "KEYWORDS"
                     ? "No keywords generated yet. Use Generate Keywords to create the first set."
-                    : "No content in this tab yet. Start writing manually or use regenerate when available."}
+                    : activeTab === "SCREENSHOT_CAPTIONS"
+                      ? "No screenshot captions generated yet. Use Generate Captions to create the first set."
+                      : "No content in this tab yet. Start writing manually or use regenerate when available."}
                 </CardContent>
               </Card>
             ) : null}
@@ -428,7 +602,9 @@ export function ProjectWorkspaceTabs({ projectId, initialContent }: Props) {
               placeholder={
                 activeTab === "KEYWORDS"
                   ? "keyword one, keyword two, keyword three"
-                  : `Write ${activeLabel.toLowerCase()} content here...`
+                  : activeTab === "SCREENSHOT_CAPTIONS"
+                    ? "Capture your progress in seconds\nStay focused with smart reminders"
+                    : `Write ${activeLabel.toLowerCase()} content here...`
               }
             />
           </>

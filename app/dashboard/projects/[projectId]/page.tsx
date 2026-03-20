@@ -128,7 +128,7 @@ export default async function ProjectWorkspacePage({
         <div className="min-w-0">
           <ProjectWorkspaceTabs projectId={project.id} initialContent={initialContent} />
           <div className="mt-3 text-xs text-slate-500">
-            Description and Keywords generation are connected. Other tabs keep placeholder regenerate actions for now.
+            Description, Keywords, and Screenshot Captions generation are connected. Other tabs keep placeholder regenerate actions for now.
           </div>
         </div>
       </div>
