@@ -2,6 +2,7 @@
 
 import { Loader2, Upload, WandSparkles } from "lucide-react";
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -136,13 +137,14 @@ export function ScreenshotCreativesPanel({
       if (!response.ok || !body.data) {
         throw new Error(body.error || "Failed to upload screenshots");
       }
+      const uploadedItems = body.data;
 
       setScreenshots((prev) => {
-        const merged = [...body.data!, ...prev];
+        const merged = [...uploadedItems, ...prev];
         return merged;
       });
-      setSelectedIds((prev) => [...new Set([...prev, ...body.data!.map((item) => item.id)])]);
-      setNotice(`Uploaded ${body.data.length} screenshot(s).`);
+      setSelectedIds((prev) => [...new Set([...prev, ...uploadedItems.map((item) => item.id)])]);
+      setNotice(`Uploaded ${uploadedItems.length} screenshot(s).`);
       event.target.value = "";
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Failed to upload screenshots");
@@ -188,12 +190,13 @@ export function ScreenshotCreativesPanel({
         }
         throw new Error(body.error || body.details || "Failed to generate screenshot creatives");
       }
+      const generationData = body.data;
 
-      setCreatives((prev) => [...body.data.items, ...prev]);
-      setWalletBalance(body.data.walletBalanceAfter);
-      onWalletBalanceChange?.(body.data.walletBalanceAfter);
+      setCreatives((prev) => [...generationData.items, ...prev]);
+      setWalletBalance(generationData.walletBalanceAfter);
+      onWalletBalanceChange?.(generationData.walletBalanceAfter);
       setNotice(
-        `Generated ${body.data.generatedCount} creative image(s), charged ${body.data.creditsCharged} credits.`,
+        `Generated ${generationData.generatedCount} creative image(s), charged ${generationData.creditsCharged} credits.`,
       );
     } catch (generationError) {
       setError(generationError instanceof Error ? generationError.message : "Failed to generate creatives");
@@ -289,10 +292,13 @@ export function ScreenshotCreativesPanel({
                     <span className="line-clamp-1">{screenshot.originalFilename}</span>
                   </label>
 
-                  <img
+                  <Image
                     src={screenshot.storagePath}
                     alt={screenshot.originalFilename}
+                    width={640}
+                    height={352}
                     className="h-44 w-full rounded border object-cover"
+                    unoptimized
                   />
 
                   <div className="mt-2 text-xs text-slate-600">

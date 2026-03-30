@@ -142,7 +142,15 @@ export async function POST(
       temperature: parsedBody.data.temperature,
     });
 
-    const creativeImages = [];
+    const creativeImages: Array<{
+      screenshotId: string;
+      screenshotPath: string;
+      headline: string;
+      subheadline: string;
+      storagePath: string;
+      width: number;
+      height: number;
+    }> = [];
     for (let index = 0; index < screenshots.length; index += 1) {
       const screenshot = screenshots[index];
       const overlay = overlayResult.items[index];
