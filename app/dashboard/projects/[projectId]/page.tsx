@@ -103,7 +103,7 @@ export default async function ProjectWorkspacePage({
       title="Project Workspace"
       description="Review project context and manage ASO content drafts by tab."
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/70 bg-white/70 p-3 shadow-sm backdrop-blur">
         <Link
           href="/dashboard/projects"
           className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"

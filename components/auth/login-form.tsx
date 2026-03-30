@@ -45,9 +45,9 @@ export function LoginForm() {
   }
 
   return (
-    <Card>
+    <Card className="border-white/70 bg-white/90 shadow-[0_20px_60px_-30px_rgba(37,99,235,0.45)] backdrop-blur">
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
+        <CardTitle className="text-2xl">Sign in</CardTitle>
         <CardDescription>Access your AI ASO workspace.</CardDescription>
       </CardHeader>
       <CardContent>

@@ -56,7 +56,7 @@ export default async function ProjectsPage() {
       ) : null}
 
       {!loadError && projects.length === 0 ? (
-        <Card>
+        <Card className="border-dashed bg-white/80">
           <CardHeader>
             <CardTitle>No projects yet</CardTitle>
             <CardDescription>Create your first project to start generating ASO assets.</CardDescription>
@@ -71,7 +71,7 @@ export default async function ProjectsPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <Link key={project.id} href={`/dashboard/projects/${project.id}`} className="block">
-              <Card className="h-full transition hover:border-slate-300 hover:shadow-sm">
+              <Card className="h-full border-slate-200/80 transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-100/60">
                 <CardHeader className="space-y-1 pb-3">
                   <CardTitle className="text-base">{project.appName}</CardTitle>
                   <CardDescription>{project.category}</CardDescription>

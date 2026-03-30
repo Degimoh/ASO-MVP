@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #f5f7ff;
+  --foreground: #0b1220;
 }
 
 @theme inline {
@@ -17,4 +17,12 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  background-image:
+    radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.14), transparent 38%),
+    radial-gradient(circle at 90% 0%, rgba(14, 165, 233, 0.12), transparent 40%),
+    linear-gradient(180deg, #f8faff 0%, #f5f7ff 55%, #f3f6ff 100%);
+}
+
+::selection {
+  background: rgba(79, 70, 229, 0.2);
 }
