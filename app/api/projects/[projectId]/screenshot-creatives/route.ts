@@ -126,24 +126,6 @@ export async function POST(
       ? parseCaptionsFromGenerationContent(latestCaptionGeneration.content)
       : [];
 
-    const overlayResult = await generateScreenshotCreativeOverlays({
-      project: {
-        appName: project.appName,
-        platform: project.platform,
-        category: project.category,
-        appSummary: project.appSummary,
-        coreFeatures: project.features.map((feature) => feature.value),
-        targetAudience: project.targetAudience,
-        toneOfVoice: project.toneOfVoice,
-        primaryLanguage: project.primaryLanguage,
-        importantKeywords: project.importantKeywords,
-      },
-      existingCaptions,
-      screenshotCount: screenshots.length,
-      model: parsedBody.data.model,
-      temperature: parsedBody.data.temperature,
-    });
-
     const creativeImages: Array<{
       screenshotId: string;
       screenshotPath: string;
@@ -153,11 +135,46 @@ export async function POST(
       width: number;
       height: number;
     }> = [];
+    const overlayItems: Array<{
+      headline: string;
+      subheadline: string;
+    }> = [];
+    let usedModel = "";
+    let usedPrompt = "";
+
     for (let index = 0; index < screenshots.length; index += 1) {
       const screenshot = screenshots[index];
-      const overlay = overlayResult.items[index];
       const sourceAbsolutePath = path.join(process.cwd(), "public", screenshot.storagePath.replace(/^\//, ""));
       const sourceBuffer = await readFile(sourceAbsolutePath);
+      const overlayResult = await generateScreenshotCreativeOverlays({
+        project: {
+          appName: project.appName,
+          platform: project.platform,
+          category: project.category,
+          appSummary: project.appSummary,
+          coreFeatures: project.features.map((feature) => feature.value),
+          targetAudience: project.targetAudience,
+          toneOfVoice: project.toneOfVoice,
+          primaryLanguage: project.primaryLanguage,
+          importantKeywords: project.importantKeywords,
+        },
+        existingCaptions,
+        screenshotCount: 1,
+        model: parsedBody.data.model,
+        temperature: parsedBody.data.temperature,
+        screenshotImages: [
+          {
+            mimeType: screenshot.mimeType,
+            base64Data: sourceBuffer.toString("base64"),
+          },
+        ],
+        screenshotSpecificContext: `Create one marketing screenshot caption for screenshot #${index + 1}. Base it on the visible UI in the attached screenshot and align with app category "${project.category}" and summary "${project.appSummary}".`,
+      });
+      const overlay = overlayResult.items[0];
+      overlayItems.push(overlay);
+      usedModel = overlayResult.model;
+      usedPrompt = overlayResult.prompt;
+
       const rendered = await buildScreenshotCreativePng({
         sourceBuffer,
         headline: overlay.headline,
@@ -181,8 +198,8 @@ export async function POST(
     const charged = await createScreenshotCreativesBatchAndDebitCredits({
       userId: auth.user.id,
       projectId: project.id,
-      prompt: overlayResult.prompt,
-      model: overlayResult.model,
+      prompt: usedPrompt || "Generated screenshot creative overlays",
+      model: usedModel || parsedBody.data.model || "unknown",
       creditsPerImage: SCREENSHOT_CREATIVE_CREDITS_PER_IMAGE,
       items: creativeImages.map((item) => ({
         screenshotId: item.screenshotId,
@@ -199,12 +216,13 @@ export async function POST(
       projectId: project.id,
       action: "generate_screenshot_creatives",
       status: "success",
-      model: overlayResult.model,
+      model: usedModel || parsedBody.data.model || undefined,
       latencyMs: Date.now() - startedAt,
       metadata: {
         generatedCount: charged.creatives.length,
         creditsCharged: charged.chargedCredits,
         walletBalanceAfter: charged.balanceAfter,
+        overlayItems,
       },
     });
 

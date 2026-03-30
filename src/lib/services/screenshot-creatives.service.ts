@@ -11,7 +11,11 @@ import {
   buildScreenshotCreativesPrompt,
   ScreenshotCreativePromptInput,
 } from "@/src/lib/prompts/screenshot-creatives.builder";
-import { OpenRouterServiceError, requestOpenRouterJson } from "@/src/lib/services/openrouter.service";
+import {
+  OpenRouterServiceError,
+  requestOpenRouterJson,
+  type OpenRouterMessageContentPart,
+} from "@/src/lib/services/openrouter.service";
 
 const TARGET_WIDTH = 1284;
 const TARGET_HEIGHT = 2778;
@@ -48,6 +52,11 @@ export type ScreenshotCreativeGenerationInput = {
   project: ScreenshotCreativeProjectContext;
   existingCaptions?: string[];
   screenshotCount: number;
+  screenshotSpecificContext?: string;
+  screenshotImages?: Array<{
+    mimeType: string;
+    base64Data: string;
+  }>;
   model?: string;
   temperature?: number;
 };
@@ -148,7 +157,38 @@ export async function generateScreenshotCreativeOverlays(
     ...input.project,
     existingCaptions: input.existingCaptions ?? [],
     screenshotCount: input.screenshotCount,
+    screenshotSpecificContext: input.screenshotSpecificContext,
   } satisfies ScreenshotCreativePromptInput);
+
+  const hasImageInputs =
+    Array.isArray(input.screenshotImages) &&
+    input.screenshotImages.length > 0 &&
+    input.screenshotImages.every(
+      (item) =>
+        typeof item.mimeType === "string" &&
+        item.mimeType.trim().length > 0 &&
+        typeof item.base64Data === "string" &&
+        item.base64Data.trim().length > 0,
+    );
+
+  let userPrompt: string | OpenRouterMessageContentPart[] = prompts.userPrompt;
+  if (hasImageInputs) {
+    const imageGuidance = [
+      "Use the attached screenshot(s) as visual input.",
+      "Create overlay copy that matches visible app flows/features from the screenshot.",
+      `Return exactly ${input.screenshotCount} items in the required JSON schema.`,
+    ].join(" ");
+
+    userPrompt = [
+      { type: "text", text: `${prompts.userPrompt}\n\n${imageGuidance}` },
+      ...(input.screenshotImages ?? []).map((image) => ({
+        type: "image_url" as const,
+        image_url: {
+          url: `data:${image.mimeType};base64,${image.base64Data}`,
+        },
+      })),
+    ];
+  }
 
   const modelCandidates = resolveScreenshotCreativeModelCandidates(input.model);
   let completion: Awaited<ReturnType<typeof requestOpenRouterJson<unknown>>> | null = null;
@@ -158,7 +198,7 @@ export async function generateScreenshotCreativeOverlays(
     try {
       completion = await requestOpenRouterJson<unknown>({
         systemPrompt: prompts.systemPrompt,
-        userPrompt: prompts.userPrompt,
+        userPrompt,
         model: candidateModel,
         temperature: input.temperature,
       });
@@ -194,7 +234,7 @@ export async function generateScreenshotCreativeOverlays(
       subheadline: item.subheadline.trim(),
     })),
     model: completion.model,
-    prompt: prompts.userPrompt,
+    prompt: typeof userPrompt === "string" ? userPrompt : prompts.userPrompt,
     rawResponse: completion.rawContent,
   };
 }

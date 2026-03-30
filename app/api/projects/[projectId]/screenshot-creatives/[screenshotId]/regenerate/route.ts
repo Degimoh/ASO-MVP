@@ -68,6 +68,8 @@ export async function POST(
       ? parseCaptionsFromGenerationContent(latestCaptionGeneration.content)
       : [];
 
+    const sourceAbsolutePath = path.join(process.cwd(), "public", screenshot.storagePath.replace(/^\//, ""));
+    const sourceBuffer = await readFile(sourceAbsolutePath);
     const overlayResult = await generateScreenshotCreativeOverlays({
       project: {
         appName: project.appName,
@@ -82,11 +84,15 @@ export async function POST(
       },
       existingCaptions,
       screenshotCount: 1,
+      screenshotImages: [
+        {
+          mimeType: screenshot.mimeType,
+          base64Data: sourceBuffer.toString("base64"),
+        },
+      ],
     });
 
     const overlay = overlayResult.items[0];
-    const sourceAbsolutePath = path.join(process.cwd(), "public", screenshot.storagePath.replace(/^\//, ""));
-    const sourceBuffer = await readFile(sourceAbsolutePath);
     const rendered = await buildScreenshotCreativePng({
       sourceBuffer,
       headline: overlay.headline,

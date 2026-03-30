@@ -12,6 +12,7 @@ export type ScreenshotCreativePromptInput = {
   importantKeywords: string[];
   existingCaptions?: string[];
   screenshotCount: number;
+  screenshotSpecificContext?: string;
 };
 
 export type ScreenshotCreativePromptResult = {
@@ -37,9 +38,12 @@ export function buildScreenshotCreativesPrompt(input: ScreenshotCreativePromptIn
     systemPrompt: [
       "You are an expert ASO creative strategist.",
       "Generate short, high-converting overlay text for Apple App Store screenshots.",
+      "When screenshot-specific context is provided, adapt the text to what is visible in that screenshot while still aligning with the product category and summary.",
       "Return strict JSON only.",
     ].join(" "),
     userPrompt: `${context}
+
+${input.screenshotSpecificContext ? `Screenshot-specific context: ${input.screenshotSpecificContext}` : ""}
 
 Generate ${input.screenshotCount} creative text variants in this exact schema:
 {
