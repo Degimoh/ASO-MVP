@@ -22,7 +22,14 @@ export function LogoutButton() {
   }
 
   return (
-    <Button type="button" variant="outline" size="sm" className="gap-2" onClick={handleLogout} disabled={isPending}>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="gap-2 dark:bg-slate-900/70 dark:text-slate-100"
+      onClick={handleLogout}
+      disabled={isPending}
+    >
       <LogOut className="h-4 w-4" />
       {isPending ? "Signing out..." : "Sign out"}
     </Button>
