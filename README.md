@@ -103,8 +103,7 @@ Screenshot creative text overlays default to Nano Banana models:
 - fallback: `google/gemini-3.1-flash-image-preview` (Nano Banana 2)
 
 You can override this with:
-- `SCREENSHOT_CREATIVE_MODEL`
-- `SCREENSHOT_CREATIVE_FALLBACK_MODEL`
+- `OPENROUTER_SCREENSHOT_CREATIVE_MODEL` (`google/gemini-3-pro-image-preview` or `google/gemini-3.1-flash-image-preview`)
 
 If no key is set, the app uses a deterministic fallback template response so the MVP workflow still works.
 

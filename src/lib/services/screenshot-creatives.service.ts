@@ -5,6 +5,9 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { Platform } from "@prisma/client";
 import {
+  resolveScreenshotCreativeModelCandidates,
+} from "@/src/lib/screenshot-creatives/models";
+import {
   buildScreenshotCreativesPrompt,
   ScreenshotCreativePromptInput,
 } from "@/src/lib/prompts/screenshot-creatives.builder";
@@ -12,10 +15,6 @@ import { OpenRouterServiceError, requestOpenRouterJson } from "@/src/lib/service
 
 const TARGET_WIDTH = 1284;
 const TARGET_HEIGHT = 2778;
-const NANO_BANANA_PRO_MODEL = "google/gemini-3-pro-image-preview";
-const NANO_BANANA_2_MODEL = "google/gemini-3.1-flash-image-preview";
-
-const allowedScreenshotCreativeModels = new Set<string>([NANO_BANANA_PRO_MODEL, NANO_BANANA_2_MODEL]);
 
 const overlaySchema = z.object({
   items: z
@@ -61,35 +60,6 @@ export type ScreenshotCreativeImageInput = {
   screenshotId: string;
   index: number;
 };
-
-function resolveScreenshotCreativeModelCandidates(requestedModel?: string): string[] {
-  const normalizedRequested = requestedModel?.trim();
-  const configuredDefault = process.env.OPENROUTER_SCREENSHOT_CREATIVE_MODEL?.trim();
-
-  if (normalizedRequested) {
-    if (!allowedScreenshotCreativeModels.has(normalizedRequested)) {
-      throw new Error(
-        `Unsupported screenshot creative model "${normalizedRequested}". Use "${NANO_BANANA_PRO_MODEL}" or "${NANO_BANANA_2_MODEL}".`,
-      );
-    }
-
-    return [normalizedRequested];
-  }
-
-  if (configuredDefault) {
-    if (!allowedScreenshotCreativeModels.has(configuredDefault)) {
-      throw new Error(
-        `Invalid OPENROUTER_SCREENSHOT_CREATIVE_MODEL value "${configuredDefault}". Use "${NANO_BANANA_PRO_MODEL}" or "${NANO_BANANA_2_MODEL}".`,
-      );
-    }
-
-    return configuredDefault === NANO_BANANA_PRO_MODEL
-      ? [NANO_BANANA_PRO_MODEL, NANO_BANANA_2_MODEL]
-      : [NANO_BANANA_2_MODEL, NANO_BANANA_PRO_MODEL];
-  }
-
-  return [NANO_BANANA_PRO_MODEL, NANO_BANANA_2_MODEL];
-}
 
 function escapeXml(value: string) {
   return value

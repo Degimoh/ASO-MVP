@@ -66,6 +66,7 @@ type Props = {
   projectId: string;
   initialWalletBalance: number;
   creditsPerImage: number;
+  screenshotCreativeModelLabel: string;
   onWalletBalanceChange?: (nextBalance: number) => void;
 };
 
@@ -73,6 +74,7 @@ export function ScreenshotCreativesPanel({
   projectId,
   initialWalletBalance,
   creditsPerImage,
+  screenshotCreativeModelLabel,
   onWalletBalanceChange,
 }: Props) {
   const [walletBalance, setWalletBalance] = useState(initialWalletBalance);
@@ -373,7 +375,12 @@ export function ScreenshotCreativesPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Screenshot Creative Generator</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle>Screenshot Creative Generator</CardTitle>
+          <span className="inline-flex items-center rounded-full border border-lime-300/70 bg-lime-100/70 px-2.5 py-0.5 text-xs font-semibold text-lime-900 dark:border-lime-500/40 dark:bg-lime-500/15 dark:text-lime-200">
+            Model: {screenshotCreativeModelLabel}
+          </span>
+        </div>
         <CardDescription>
           Upload app screenshots and generate Apple Store-ready images (1284x2778) with AI marketing text overlays.
         </CardDescription>

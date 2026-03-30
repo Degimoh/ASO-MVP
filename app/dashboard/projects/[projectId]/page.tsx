@@ -8,6 +8,10 @@ import { ScreenshotCreativesPanel } from "@/components/workspace/screenshot-crea
 import { ProjectWorkspaceTabs, WorkspaceTabType } from "@/components/workspace/project-workspace-tabs";
 import { getCurrentUserFromSession } from "@/src/lib/auth/session";
 import { getProjectWorkspaceByIdForUser } from "@/src/lib/repositories/project.repository";
+import {
+  formatScreenshotCreativeModelName,
+  resolveScreenshotCreativeModelConfig,
+} from "@/src/lib/screenshot-creatives/models";
 import { SCREENSHOT_CREATIVE_CREDITS_PER_IMAGE } from "@/src/lib/wallet/generation-pricing";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +101,9 @@ export default async function ProjectWorkspacePage({
     model: result.model,
     generatedAt: result.generatedAt.toISOString(),
   }));
+  const screenshotCreativeModelLabel = formatScreenshotCreativeModelName(
+    resolveScreenshotCreativeModelConfig().primaryModel,
+  );
 
   return (
     <PageShell
@@ -198,6 +205,7 @@ export default async function ProjectWorkspacePage({
               projectId={project.id}
               initialWalletBalance={authUser?.walletBalance ?? 0}
               creditsPerImage={SCREENSHOT_CREATIVE_CREDITS_PER_IMAGE}
+              screenshotCreativeModelLabel={screenshotCreativeModelLabel}
             />
           </div>
           <div className="mt-3 text-xs text-slate-500">
