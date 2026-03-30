@@ -70,27 +70,29 @@ export default async function ProjectsPage() {
       ) : !loadError ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
-            <Card key={project.id}>
-              <CardHeader className="space-y-1 pb-3">
-                <CardTitle className="text-base">{project.appName}</CardTitle>
-                <CardDescription>{project.category}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm text-slate-600">
-                <p>
-                  <span className="font-medium text-slate-900">Platform:</span> {formatPlatform(project.platform)}
-                </p>
-                <p>
-                  <span className="font-medium text-slate-900">Primary language:</span> {project.primaryLanguage}
-                </p>
-                <p>
-                  <span className="font-medium text-slate-900">Updated:</span>{" "}
-                  {new Intl.DateTimeFormat("en-US", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  }).format(project.updatedAt)}
-                </p>
-              </CardContent>
-            </Card>
+            <Link key={project.id} href={`/dashboard/projects/${project.id}`} className="block">
+              <Card className="h-full transition hover:border-slate-300 hover:shadow-sm">
+                <CardHeader className="space-y-1 pb-3">
+                  <CardTitle className="text-base">{project.appName}</CardTitle>
+                  <CardDescription>{project.category}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm text-slate-600">
+                  <p>
+                    <span className="font-medium text-slate-900">Platform:</span> {formatPlatform(project.platform)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-900">Primary language:</span> {project.primaryLanguage}
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-900">Updated:</span>{" "}
+                    {new Intl.DateTimeFormat("en-US", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }).format(project.updatedAt)}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       ) : null}
