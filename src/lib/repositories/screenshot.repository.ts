@@ -34,6 +34,18 @@ export async function createProjectScreenshot(input: {
   });
 }
 
+export async function getProjectScreenshotByIdForUser(input: { screenshotId: string; userId: string }) {
+  return prisma.projectScreenshot.findFirst({
+    where: {
+      id: input.screenshotId,
+      project: {
+        userId: input.userId,
+      },
+    },
+    include: screenshotInclude,
+  });
+}
+
 export async function listProjectScreenshotsByProjectIdForUser(projectId: string, userId: string) {
   return prisma.projectScreenshot.findMany({
     where: {
@@ -67,6 +79,39 @@ export async function listProjectScreenshotsByIdsForUser(input: {
   });
 }
 
+export async function deleteProjectScreenshotByIdForUser(input: { screenshotId: string; userId: string }) {
+  const screenshot = await prisma.projectScreenshot.findFirst({
+    where: {
+      id: input.screenshotId,
+      project: {
+        userId: input.userId,
+      },
+    },
+    select: {
+      id: true,
+      storagePath: true,
+      creatives: {
+        select: {
+          id: true,
+          storagePath: true,
+        },
+      },
+    },
+  });
+
+  if (!screenshot) {
+    return null;
+  }
+
+  await prisma.projectScreenshot.delete({
+    where: {
+      id: screenshot.id,
+    },
+  });
+
+  return screenshot;
+}
+
 export async function createScreenshotCreative(input: {
   projectId: string;
   screenshotId: string;
@@ -93,6 +138,35 @@ export async function createScreenshotCreative(input: {
       height: input.height ?? 2778,
       creditsCharged: input.creditsCharged ?? 0,
     },
+  });
+}
+
+export async function getLatestScreenshotCreativeByScreenshotIdForUser(input: {
+  screenshotId: string;
+  userId: string;
+}) {
+  return prisma.screenshotCreative.findFirst({
+    where: {
+      screenshotId: input.screenshotId,
+      screenshot: {
+        project: {
+          userId: input.userId,
+        },
+      },
+    },
+    orderBy: [{ generatedAt: "desc" }],
+  });
+}
+
+export async function listScreenshotCreativesByProjectIdForUser(input: { projectId: string; userId: string }) {
+  return prisma.screenshotCreative.findMany({
+    where: {
+      projectId: input.projectId,
+      project: {
+        userId: input.userId,
+      },
+    },
+    orderBy: [{ generatedAt: "desc" }],
   });
 }
 

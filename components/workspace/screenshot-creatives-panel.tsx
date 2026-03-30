@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Upload, WandSparkles } from "lucide-react";
+import { Download, Loader2, RefreshCcw, Trash2, Upload, WandSparkles } from "lucide-react";
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,22 @@ type GeneratedCreative = {
   width: number;
   height: number;
   generatedAt: string;
+};
+
+type RegenerateApiSuccess = {
+  data: {
+    id: string;
+    screenshotId: string;
+    screenshotPath: string;
+    headline: string | null;
+    subheadline: string | null;
+    storagePath: string | null;
+    width: number;
+    height: number;
+    generatedAt: string;
+    creditsCharged: number;
+    walletBalanceAfter: number;
+  };
 };
 
 type ApiErrorBody = {
@@ -58,6 +74,10 @@ export function ScreenshotCreativesPanel({
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [replacingScreenshotId, setReplacingScreenshotId] = useState<string | null>(null);
+  const [deletingScreenshotId, setDeletingScreenshotId] = useState<string | null>(null);
+  const [regeneratingScreenshotId, setRegeneratingScreenshotId] = useState<string | null>(null);
+  const [isExportingZip, setIsExportingZip] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -205,6 +225,129 @@ export function ScreenshotCreativesPanel({
     }
   }
 
+  async function handleDeleteScreenshot(screenshotId: string) {
+    setDeletingScreenshotId(screenshotId);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/screenshots`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ screenshotId }),
+      });
+      const body = (await response.json()) as ApiErrorBody & {
+        data?: { screenshotId: string; deleted: boolean };
+      };
+      if (!response.ok || !body.data?.deleted) {
+        throw new Error(body.error || body.details || "Failed to delete screenshot");
+      }
+
+      setScreenshots((prev) => prev.filter((item) => item.id !== screenshotId));
+      setSelectedIds((prev) => prev.filter((item) => item !== screenshotId));
+      setCreatives((prev) => prev.filter((item) => item.screenshotId !== screenshotId));
+      setNotice("Screenshot deleted.");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete screenshot");
+    } finally {
+      setDeletingScreenshotId(null);
+    }
+  }
+
+  async function handleReplaceScreenshot(screenshotId: string, file: File) {
+    setReplacingScreenshotId(screenshotId);
+    setError(null);
+    setNotice(null);
+    try {
+      const formData = new FormData();
+      formData.append("screenshotId", screenshotId);
+      formData.append("file", file);
+
+      const response = await fetch(`/api/projects/${projectId}/screenshots`, {
+        method: "PUT",
+        body: formData,
+      });
+      const body = (await response.json()) as ApiErrorBody & {
+        data?: UploadedScreenshot;
+      };
+      if (!response.ok || !body.data) {
+        throw new Error(body.error || body.details || "Failed to replace screenshot");
+      }
+      const replaced = body.data;
+
+      setScreenshots((prev) => [replaced, ...prev.filter((item) => item.id !== screenshotId)]);
+      setSelectedIds((prev) => {
+        const withoutOld = prev.filter((id) => id !== screenshotId);
+        return [...new Set([replaced.id, ...withoutOld])];
+      });
+      setCreatives((prev) => prev.filter((item) => item.screenshotId !== screenshotId));
+      setNotice("Screenshot replaced.");
+    } catch (replaceError) {
+      setError(replaceError instanceof Error ? replaceError.message : "Failed to replace screenshot");
+    } finally {
+      setReplacingScreenshotId(null);
+    }
+  }
+
+  async function handleRegenerateOne(screenshotId: string) {
+    setRegeneratingScreenshotId(screenshotId);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/screenshot-creatives/${screenshotId}/regenerate`,
+        { method: "POST" },
+      );
+      const body = (await response.json()) as RegenerateApiSuccess & ApiErrorBody;
+      if (!response.ok || !body.data) {
+        if (body.code === "INSUFFICIENT_CREDITS") {
+          throw new Error(
+            body.details ||
+              `Insufficient credits. Need ${body.requiredCredits ?? "?"}, available ${body.availableCredits ?? "?"}.`,
+          );
+        }
+        throw new Error(body.error || body.details || "Failed to regenerate selected creative");
+      }
+
+      const item = body.data;
+      setCreatives((prev) => [item, ...prev]);
+      setWalletBalance(item.walletBalanceAfter);
+      onWalletBalanceChange?.(item.walletBalanceAfter);
+      setNotice(`Regenerated creative for selected screenshot. Charged ${item.creditsCharged} credits.`);
+    } catch (regenError) {
+      setError(regenError instanceof Error ? regenError.message : "Failed to regenerate selected creative");
+    } finally {
+      setRegeneratingScreenshotId(null);
+    }
+  }
+
+  async function handleExportZip() {
+    setIsExportingZip(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/screenshot-creatives/export`);
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+        throw new Error(body.error || body.details || "Failed to export ZIP");
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `project-${projectId}-screenshot-creatives.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+      setNotice("ZIP export started.");
+    } catch (zipError) {
+      setError(zipError instanceof Error ? zipError.message : "Failed to export ZIP");
+    } finally {
+      setIsExportingZip(false);
+    }
+  }
+
   const creativeByScreenshot = useMemo(() => {
     const map = new Map<string, GeneratedCreative>();
     for (const creative of creatives) {
@@ -240,11 +383,30 @@ export function ScreenshotCreativesPanel({
           <Button
             type="button"
             onClick={handleGenerate}
-            disabled={isLoading || isUploading || isGenerating || selectedIds.length === 0 || !canAfford}
+            disabled={
+              isLoading ||
+              isUploading ||
+              isGenerating ||
+              isExportingZip ||
+              replacingScreenshotId !== null ||
+              deletingScreenshotId !== null ||
+              regeneratingScreenshotId !== null ||
+              selectedIds.length === 0 ||
+              !canAfford
+            }
             title={`Cost: ${creditsPerImage} credits per image. Selected: ${selectedScreenshots.length}.`}
           >
             {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <WandSparkles className="mr-2 h-4 w-4" />}
             {isGenerating ? "Generating..." : "Generate Creative Images"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleExportZip}
+            disabled={isLoading || isUploading || isGenerating || isExportingZip || creatives.length === 0}
+          >
+            {isExportingZip ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            {isExportingZip ? "Exporting..." : "Export All PNG (ZIP)"}
           </Button>
         </div>
 
@@ -287,7 +449,13 @@ export function ScreenshotCreativesPanel({
                       type="checkbox"
                       checked={selected}
                       onChange={() => toggleSelection(screenshot.id)}
-                      disabled={isUploading || isGenerating}
+                      disabled={
+                        isUploading ||
+                        isGenerating ||
+                        replacingScreenshotId === screenshot.id ||
+                        deletingScreenshotId === screenshot.id ||
+                        regeneratingScreenshotId === screenshot.id
+                      }
                     />
                     <span className="line-clamp-1">{screenshot.originalFilename}</span>
                   </label>
@@ -303,6 +471,79 @@ export function ScreenshotCreativesPanel({
 
                   <div className="mt-2 text-xs text-slate-600">
                     {screenshot.width ?? "?"}x{screenshot.height ?? "?"} · {Math.round(screenshot.sizeBytes / 1024)} KB
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <label className="inline-flex cursor-pointer items-center rounded border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                      {replacingScreenshotId === screenshot.id ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Replace
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          void handleReplaceScreenshot(screenshot.id, file);
+                          event.currentTarget.value = "";
+                        }}
+                        disabled={
+                          isUploading ||
+                          isGenerating ||
+                          replacingScreenshotId !== null ||
+                          deletingScreenshotId !== null ||
+                          regeneratingScreenshotId !== null
+                        }
+                      />
+                    </label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => void handleRegenerateOne(screenshot.id)}
+                      disabled={
+                        isUploading ||
+                        isGenerating ||
+                        replacingScreenshotId !== null ||
+                        deletingScreenshotId !== null ||
+                        regeneratingScreenshotId !== null ||
+                        walletBalance < creditsPerImage
+                      }
+                      title={`Regenerate only this screenshot creative. Cost: ${creditsPerImage} credits.`}
+                    >
+                      {regeneratingScreenshotId === screenshot.id ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Regenerate
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-xs text-red-700 hover:text-red-700"
+                      onClick={() => void handleDeleteScreenshot(screenshot.id)}
+                      disabled={
+                        isUploading ||
+                        isGenerating ||
+                        replacingScreenshotId !== null ||
+                        deletingScreenshotId !== null ||
+                        regeneratingScreenshotId !== null
+                      }
+                    >
+                      {deletingScreenshotId === screenshot.id ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Delete
+                    </Button>
                   </div>
 
                   {latestCreative?.storagePath ? (
