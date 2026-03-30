@@ -3,7 +3,6 @@
 import { Bell, UserCircle2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/auth/logout-button";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { getSectionMeta } from "@/components/dashboard/navigation";
 
@@ -28,7 +27,6 @@ export function DashboardTopHeader({ userLabel, userBalance }: DashboardTopHeade
         </div>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
           <Button
             variant="ghost"
             size="sm"

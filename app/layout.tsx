@@ -14,13 +14,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const themeInitScript = `(function(){try{var s=localStorage.getItem('aso-theme');var d=s?s:(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');var r=document.documentElement;r.classList.toggle('dark',d==='dark');r.style.colorScheme=d;}catch(e){}})();`;
   return (
     <html lang="en" className={inter.variable}>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
-      <body className="min-h-screen font-sans text-slate-900 antialiased dark:text-slate-100">{children}</body>
+      <body className="min-h-screen font-sans text-slate-900 antialiased">{children}</body>
     </html>
   );
 }

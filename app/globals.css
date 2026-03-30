@@ -1,18 +1,10 @@
 @import "tailwindcss";
-@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: #f7fff5;
   --foreground: #07110a;
   --border-rgb: 187 247 208;
   color-scheme: light;
-}
-
-.dark {
-  --background: #020c06;
-  --foreground: #d9ffe9;
-  --border-rgb: 22 101 52;
-  color-scheme: dark;
 }
 
 @theme inline {
@@ -34,17 +26,6 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.dark body {
-  background-image:
-    radial-gradient(circle at 6% 10%, rgba(132, 255, 61, 0.18), transparent 33%),
-    radial-gradient(circle at 94% 2%, rgba(74, 222, 128, 0.2), transparent 36%),
-    linear-gradient(180deg, #020c06 0%, #03110a 55%, #04150c 100%);
-}
-
 ::selection {
   background: rgba(132, 255, 61, 0.35);
-}
-
-.dark ::selection {
-  background: rgba(163, 255, 115, 0.3);
 }
