@@ -18,16 +18,16 @@ function inferMimeType(storagePath: string) {
 
 export async function GET(
   _request: Request,
-  { params }: { params: Promise<{ projectId: string; creativeId: string }> },
+  { params }: { params: Promise<{ projectId: string; screenshotId: string }> },
 ) {
   const auth = await requireApiUser();
   if (!auth.user) {
     return auth.unauthorizedResponse;
   }
 
-  const { projectId, creativeId } = await params;
+  const { projectId, screenshotId } = await params;
   const creative = await getScreenshotCreativeByIdForUser({
-    creativeId,
+    creativeId: screenshotId,
     userId: auth.user.id,
   });
   if (!creative || creative.projectId !== projectId || !creative.storagePath) {
