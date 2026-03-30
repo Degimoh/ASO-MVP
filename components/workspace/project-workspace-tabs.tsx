@@ -1530,8 +1530,8 @@ export function ProjectWorkspaceTabs({
               className={cn(
                 "rounded-md border px-3 py-1.5 text-sm font-medium transition",
                 activeTab === tab.key
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                  ? "border-lime-300 bg-lime-100 text-lime-900 shadow-sm"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-lime-50/70",
               )}
             >
               {tab.label}
@@ -1946,7 +1946,7 @@ export function ProjectWorkspaceTabs({
                         key={entry.id}
                         className={cn(
                           "flex items-start justify-between gap-3 rounded-md border p-2",
-                          isCurrent ? "border-slate-900 bg-slate-50" : "border-slate-200",
+                          isCurrent ? "border-lime-300 bg-lime-50/70" : "border-slate-200",
                         )}
                       >
                         <div className="space-y-1 text-xs text-slate-600">

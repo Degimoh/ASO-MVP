@@ -17,7 +17,7 @@ export default async function Home() {
     <main className="relative mx-auto flex min-h-screen w-full max-w-5xl items-center overflow-hidden px-4 py-12">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center text-lime-700/20 opacity-35 dark:text-lime-300/20 dark:opacity-30"
+        className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center text-lime-700/20 opacity-35"
       >
         <svg
           viewBox="0 0 1200 620"
@@ -41,13 +41,13 @@ export default async function Home() {
 
       <div className="w-full space-y-8">
         <div className="space-y-4 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-lime-700/80 dark:text-lime-300/90">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-lime-700/80">
             AI ASO Generator
           </p>
-          <h1 className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-lime-100 sm:text-5xl">
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
             ASO-сервис для инди-разработчиков и крупных mobile-команд
           </h1>
-          <p className="mx-auto max-w-3xl text-base text-slate-700 dark:text-lime-100/80 sm:text-lg">
+          <p className="mx-auto max-w-3xl text-base text-slate-700 sm:text-lg">
             Создавайте описания, keywords, captions, update notes и локализацию в одном рабочем пространстве, чтобы
             быстрее выпускать и масштабировать мобильные продукты.
           </p>
@@ -57,11 +57,11 @@ export default async function Home() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Rocket className="h-5 w-5 text-lime-700 dark:text-lime-300" />
+                <Rocket className="h-5 w-5 text-lime-700" />
                 Для indie-разработчиков
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-slate-700 dark:text-lime-100/80">
+            <CardContent className="text-sm text-slate-700">
               Запускайте ASO-материалы быстрее и экономьте время на рутине: генерация, редактирование, версии и экспорт
               в пару кликов.
             </CardContent>
@@ -70,11 +70,11 @@ export default async function Home() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Building2 className="h-5 w-5 text-lime-700 dark:text-lime-300" />
+                <Building2 className="h-5 w-5 text-lime-700" />
                 Для больших компаний
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-slate-700 dark:text-lime-100/80">
+            <CardContent className="text-sm text-slate-700">
               Стандартизируйте ASO-процессы для нескольких приложений и рынков: единый workflow для команд продукта,
               маркетинга и growth-направления.
             </CardContent>

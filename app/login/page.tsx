@@ -15,7 +15,7 @@ export default async function LoginPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8">
       <div className="w-full">
         <div className="mb-6 space-y-2 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-lime-700/80 dark:text-lime-300/90">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-lime-700/80">
             Welcome Back
           </p>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">AI ASO Generator</h1>

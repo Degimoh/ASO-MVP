@@ -45,7 +45,7 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="border-lime-200/70 bg-white/90 shadow-[0_20px_60px_-30px_rgba(132,255,61,0.5)] backdrop-blur dark:border-lime-500/30 dark:bg-slate-950/80 dark:shadow-[0_24px_80px_-42px_rgba(132,255,61,0.45)]">
+    <Card className="border-lime-200/80 bg-white/95 shadow-[0_18px_42px_-28px_rgba(132,204,22,0.35)] backdrop-blur">
       <CardHeader>
         <CardTitle className="text-2xl">Sign in</CardTitle>
         <CardDescription>Access your AI ASO workspace.</CardDescription>
@@ -85,9 +85,9 @@ export function LoginForm() {
           </Button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-slate-600 dark:text-slate-300">
+        <p className="mt-4 text-center text-sm text-slate-600">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-medium text-lime-700 hover:underline dark:text-lime-300">
+          <Link href="/register" className="font-medium text-lime-700 hover:underline">
             Create one
           </Link>
         </p>

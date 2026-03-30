@@ -9,11 +9,11 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-gradient-to-r from-lime-400 to-green-500 text-emerald-950 shadow-[0_10px_25px_-12px_rgba(101,163,13,0.78)] hover:from-lime-300 hover:to-green-400 dark:from-lime-500 dark:to-green-500",
+          "bg-gradient-to-r from-lime-400 to-green-500 text-emerald-950 shadow-[0_10px_25px_-12px_rgba(101,163,13,0.55)] hover:from-lime-300 hover:to-green-400",
         outline:
-          "border border-green-200/90 bg-white/85 text-slate-800 shadow-sm backdrop-blur hover:border-lime-300 hover:bg-lime-50/80 hover:text-emerald-900 dark:border-green-800/80 dark:bg-green-950/40 dark:text-green-100 dark:hover:border-lime-500/60 dark:hover:bg-green-900/40",
+          "border border-green-200/90 bg-white/90 text-slate-800 shadow-sm backdrop-blur hover:border-lime-300 hover:bg-lime-50/80 hover:text-emerald-900",
         ghost:
-          "text-slate-700 hover:bg-lime-100/80 hover:text-emerald-900 dark:text-green-100 dark:hover:bg-green-900/40 dark:hover:text-lime-200",
+          "text-slate-700 hover:bg-lime-100/80 hover:text-emerald-900",
       },
       size: {
         default: "h-10 px-4 py-2",

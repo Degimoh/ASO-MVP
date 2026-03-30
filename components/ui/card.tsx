@@ -5,7 +5,7 @@ function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "rounded-2xl border border-lime-200/80 bg-white/95 text-slate-950 shadow-[0_10px_30px_rgba(34,197,94,0.12)] backdrop-blur-sm dark:border-lime-500/30 dark:bg-slate-950/80 dark:text-lime-50 dark:shadow-[0_12px_36px_rgba(0,0,0,0.45)]",
+        "rounded-2xl border border-lime-200/75 bg-white/96 text-slate-900 shadow-[0_10px_30px_rgba(145,206,120,0.18)] backdrop-blur-sm",
         className,
       )}
       {...props}
@@ -22,7 +22,7 @@ function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElem
 }
 
 function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-slate-600 dark:text-lime-200/70", className)} {...props} />;
+  return <p className={cn("text-sm text-slate-600", className)} {...props} />;
 }
 
 function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

@@ -377,7 +377,7 @@ export function ScreenshotCreativesPanel({
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>Screenshot Creative Generator</CardTitle>
-          <span className="inline-flex items-center rounded-full border border-lime-300/70 bg-lime-100/70 px-2.5 py-0.5 text-xs font-semibold text-lime-900 dark:border-lime-500/40 dark:bg-lime-500/15 dark:text-lime-200">
+          <span className="inline-flex items-center rounded-full border border-lime-300/70 bg-lime-100/80 px-2.5 py-0.5 text-xs font-semibold text-lime-900">
             Model: {screenshotCreativeModelLabel}
           </span>
         </div>
