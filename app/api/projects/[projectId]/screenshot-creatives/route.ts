@@ -61,11 +61,13 @@ export async function GET(
       screenshot.creatives.map((creative) => ({
         id: creative.id,
         screenshotId: screenshot.id,
-        screenshotPath: screenshot.storagePath,
+        screenshotPath: `/api/projects/${projectId}/screenshots/${screenshot.id}/file`,
         status: creative.status,
         headline: creative.headline,
         subheadline: creative.subheadline,
-        storagePath: creative.storagePath,
+        storagePath: creative.storagePath
+          ? `/api/projects/${projectId}/screenshot-creatives/${creative.id}/file`
+          : null,
         width: creative.width,
         height: creative.height,
         creditsCharged: creative.creditsCharged,
@@ -212,13 +214,15 @@ export async function POST(
         creditsCharged: charged.chargedCredits,
         creditsPerImage: SCREENSHOT_CREATIVE_CREDITS_PER_IMAGE,
         walletBalanceAfter: charged.balanceAfter,
-        items: charged.creatives.map((creative, index) => ({
+        items: charged.creatives.map((creative) => ({
           id: creative.id,
           screenshotId: creative.screenshotId,
-          screenshotPath: creativeImages[index]?.screenshotPath,
+          screenshotPath: `/api/projects/${projectId}/screenshots/${creative.screenshotId}/file`,
           headline: creative.headline,
           subheadline: creative.subheadline,
-          storagePath: creative.storagePath,
+          storagePath: creative.storagePath
+            ? `/api/projects/${projectId}/screenshot-creatives/${creative.id}/file`
+            : null,
           width: creative.width,
           height: creative.height,
           generatedAt: creative.generatedAt.toISOString(),

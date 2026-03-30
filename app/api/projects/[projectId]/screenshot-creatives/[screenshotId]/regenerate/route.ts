@@ -135,10 +135,10 @@ export async function POST(
       data: {
         id: creative.id,
         screenshotId: screenshot.id,
-        screenshotPath: screenshot.storagePath,
+        screenshotPath: `/api/projects/${project.id}/screenshots/${screenshot.id}/file`,
         headline: creative.headline,
         subheadline: creative.subheadline,
-        storagePath: creative.storagePath,
+        storagePath: `/api/projects/${project.id}/screenshot-creatives/${creative.id}/file`,
         width: creative.width,
         height: creative.height,
         generatedAt: creative.generatedAt.toISOString(),

@@ -158,6 +158,17 @@ export async function getLatestScreenshotCreativeByScreenshotIdForUser(input: {
   });
 }
 
+export async function getScreenshotCreativeByIdForUser(input: { creativeId: string; userId: string }) {
+  return prisma.screenshotCreative.findFirst({
+    where: {
+      id: input.creativeId,
+      project: {
+        userId: input.userId,
+      },
+    },
+  });
+}
+
 export async function listScreenshotCreativesByProjectIdForUser(input: { projectId: string; userId: string }) {
   return prisma.screenshotCreative.findMany({
     where: {

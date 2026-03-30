@@ -14,17 +14,17 @@ type UploadedScreenshot = {
   sizeBytes: number;
   width: number | null;
   height: number | null;
-  storagePath: string;
+  fileUrl: string;
   createdAt: string;
 };
 
 type GeneratedCreative = {
   id: string;
   screenshotId: string;
-  screenshotPath: string;
+  screenshotFileUrl: string;
   headline: string | null;
   subheadline: string | null;
-  storagePath: string | null;
+  fileUrl: string | null;
   width: number;
   height: number;
   generatedAt: string;
@@ -34,10 +34,10 @@ type RegenerateApiSuccess = {
   data: {
     id: string;
     screenshotId: string;
-    screenshotPath: string;
+    screenshotFileUrl: string;
     headline: string | null;
     subheadline: string | null;
-    storagePath: string | null;
+    fileUrl: string | null;
     width: number;
     height: number;
     generatedAt: string;
@@ -473,7 +473,7 @@ export function ScreenshotCreativesPanel({
                   </label>
 
                   <Image
-                    src={screenshot.storagePath}
+                    src={`/api/projects/${projectId}/screenshots/${screenshot.id}/file`}
                     alt={screenshot.originalFilename}
                     width={640}
                     height={352}
@@ -558,12 +558,12 @@ export function ScreenshotCreativesPanel({
                     </Button>
                   </div>
 
-                  {latestCreative?.storagePath ? (
+                  {latestCreative?.fileUrl ? (
                     <div className="mt-3 space-y-1 rounded border border-emerald-200 bg-emerald-50 p-2 text-xs">
                       <p className="font-medium text-emerald-800">Latest generated creative</p>
                       <p className="line-clamp-2 text-emerald-900">{latestCreative.headline}</p>
                       <a
-                        href={latestCreative.storagePath}
+                        href={latestCreative.fileUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex text-emerald-700 underline"
