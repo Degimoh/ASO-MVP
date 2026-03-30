@@ -26,7 +26,7 @@ export function LogoutButton() {
       type="button"
       variant="outline"
       size="sm"
-      className="gap-2 dark:bg-slate-900/70 dark:text-slate-100"
+      className="gap-2 dark:bg-emerald-950/40 dark:text-emerald-100"
       onClick={handleLogout}
       disabled={isPending}
     >

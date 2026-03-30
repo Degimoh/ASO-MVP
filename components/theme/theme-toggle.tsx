@@ -17,7 +17,7 @@ export function ThemeToggle() {
     <Button
       variant="ghost"
       size="sm"
-      className="text-slate-500 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
+      className="text-slate-600 hover:bg-lime-100/80 hover:text-lime-700 dark:text-lime-300/80 dark:hover:bg-lime-500/15 dark:hover:text-lime-200"
       onClick={toggleTheme}
       title="Toggle dark mode"
       aria-label="Toggle dark mode"

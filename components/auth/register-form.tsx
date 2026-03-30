@@ -47,7 +47,7 @@ export function RegisterForm() {
   }
 
   return (
-    <Card className="border-white/60 bg-white/80 shadow-xl shadow-indigo-100/40 backdrop-blur-sm">
+    <Card className="border-lime-200/80 bg-white/90 shadow-xl shadow-lime-200/40 backdrop-blur-sm dark:border-lime-400/20 dark:bg-slate-950/75 dark:shadow-[0_24px_50px_-28px_rgba(132,255,61,0.4)]">
       <CardHeader>
         <CardTitle className="text-xl">Create account</CardTitle>
         <CardDescription>Start generating ASO assets for your own projects.</CardDescription>

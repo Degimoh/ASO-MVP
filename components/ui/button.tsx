@@ -4,15 +4,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/70 focus-visible:ring-offset-2",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500/70 focus-visible:ring-offset-2",
   {
     variants: {
       variant: {
         default:
-          "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[0_10px_25px_-12px_rgba(79,70,229,0.8)] hover:from-indigo-500 hover:to-violet-500",
+          "bg-gradient-to-r from-lime-400 to-green-500 text-emerald-950 shadow-[0_10px_25px_-12px_rgba(101,163,13,0.78)] hover:from-lime-300 hover:to-green-400 dark:from-lime-500 dark:to-green-500",
         outline:
-          "border border-slate-200/90 bg-white/85 text-slate-800 shadow-sm backdrop-blur hover:border-indigo-200 hover:bg-indigo-50/60 hover:text-indigo-700",
-        ghost: "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900",
+          "border border-green-200/90 bg-white/85 text-slate-800 shadow-sm backdrop-blur hover:border-lime-300 hover:bg-lime-50/80 hover:text-emerald-900 dark:border-green-800/80 dark:bg-green-950/40 dark:text-green-100 dark:hover:border-lime-500/60 dark:hover:bg-green-900/40",
+        ghost:
+          "text-slate-700 hover:bg-lime-100/80 hover:text-emerald-900 dark:text-green-100 dark:hover:bg-green-900/40 dark:hover:text-lime-200",
       },
       size: {
         default: "h-10 px-4 py-2",

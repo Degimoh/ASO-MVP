@@ -71,7 +71,7 @@ export default async function ProjectsPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <Link key={project.id} href={`/dashboard/projects/${project.id}`} className="block">
-              <Card className="h-full border-slate-200/80 transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-100/60">
+              <Card className="h-full border-emerald-200/80 transition hover:-translate-y-0.5 hover:border-lime-300 hover:shadow-lg hover:shadow-lime-300/35">
                 <CardHeader className="space-y-1 pb-3">
                   <CardTitle className="text-base">{project.appName}</CardTitle>
                   <CardDescription>{project.category}</CardDescription>

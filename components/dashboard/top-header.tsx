@@ -17,10 +17,12 @@ export function DashboardTopHeader({ userLabel, userBalance }: DashboardTopHeade
   const section = getSectionMeta(pathname);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-white/70 bg-white/80 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/70">
+    <header className="sticky top-0 z-20 border-b border-lime-200/80 bg-white/75 backdrop-blur-xl dark:border-lime-900/60 dark:bg-[#03140b]/80">
       <div className="mx-auto flex h-[4.5rem] max-w-[1600px] items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="space-y-0.5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500/80">AI ASO Generator</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-lime-600/90 dark:text-lime-300/90">
+            AI ASO Generator
+          </p>
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{section.title}</h1>
           <p className="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">{section.description}</p>
         </div>
@@ -30,14 +32,14 @@ export function DashboardTopHeader({ userLabel, userBalance }: DashboardTopHeade
           <Button
             variant="ghost"
             size="sm"
-            className="text-slate-500 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
+            className="text-lime-700/80 hover:text-lime-900 dark:text-lime-300/80 dark:hover:text-lime-100"
           >
             <Bell className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 rounded-full bg-white/80 dark:bg-slate-900/70 dark:text-slate-100"
+            className="gap-2 rounded-full border-lime-200/80 bg-lime-50/70 text-lime-900 dark:border-lime-800/80 dark:bg-lime-950/30 dark:text-lime-100"
             disabled
           >
             <UserCircle2 className="h-4 w-4" />
@@ -46,7 +48,7 @@ export function DashboardTopHeader({ userLabel, userBalance }: DashboardTopHeade
           <Button
             variant="outline"
             size="sm"
-            className="rounded-full bg-indigo-50/80 text-indigo-700 dark:border-indigo-400/40 dark:bg-indigo-500/10 dark:text-indigo-200"
+            className="rounded-full border-lime-300/80 bg-lime-100/80 text-lime-900 dark:border-lime-500/40 dark:bg-lime-400/10 dark:text-lime-200"
             disabled
           >
             {userBalance} credits
