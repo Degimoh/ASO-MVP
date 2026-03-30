@@ -88,6 +88,8 @@ model Project {
   importantKeywords String[]
   features          ProjectFeature[]
   locales           ProjectLocale[]
+  screenshots       ProjectScreenshot[]
+  screenshotCreatives ScreenshotCreative[]
   generationResults GenerationResult[]
   usageLogs         UsageLog[]
   createdAt         DateTime           @default(now())
@@ -119,6 +121,46 @@ model ProjectLocale {
 
   @@unique([projectId, code])
   @@index([projectId])
+}
+
+model ProjectScreenshot {
+  id               String              @id @default(cuid())
+  projectId        String
+  project          Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  storagePath      String
+  width            Int?
+  height           Int?
+  creatives        ScreenshotCreative[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([projectId, createdAt])
+}
+
+model ScreenshotCreative {
+  id            String           @id @default(cuid())
+  projectId     String
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  screenshotId  String
+  screenshot    ProjectScreenshot @relation(fields: [screenshotId], references: [id], onDelete: Cascade)
+  status        GenerationStatus @default(PENDING)
+  prompt        String           @db.Text
+  model         String
+  headline      String?
+  subheadline   String?
+  storagePath   String?
+  width         Int              @default(1284)
+  height        Int              @default(2778)
+  creditsCharged Int             @default(0)
+  error         String?          @db.Text
+  generatedAt   DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([projectId, generatedAt])
+  @@index([screenshotId, generatedAt])
 }
 
 model GenerationResult {

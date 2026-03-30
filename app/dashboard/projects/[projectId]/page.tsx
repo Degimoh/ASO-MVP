@@ -4,9 +4,11 @@ import { PageShell } from "@/components/dashboard/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScreenshotCreativesPanel } from "@/components/workspace/screenshot-creatives-panel";
 import { ProjectWorkspaceTabs, WorkspaceTabType } from "@/components/workspace/project-workspace-tabs";
 import { getCurrentUserFromSession } from "@/src/lib/auth/session";
 import { getProjectWorkspaceByIdForUser } from "@/src/lib/repositories/project.repository";
+import { SCREENSHOT_CREATIVE_CREDITS_PER_IMAGE } from "@/src/lib/wallet/generation-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -191,6 +193,13 @@ export default async function ProjectWorkspacePage({
             initialVersionHistory={initialVersionHistory}
             initialWalletBalance={authUser?.walletBalance ?? 0}
           />
+          <div className="mt-4">
+            <ScreenshotCreativesPanel
+              projectId={project.id}
+              initialWalletBalance={authUser?.walletBalance ?? 0}
+              creditsPerImage={SCREENSHOT_CREATIVE_CREDITS_PER_IMAGE}
+            />
+          </div>
           <div className="mt-3 text-xs text-slate-500">
             Individual generators and Generate All are connected with partial-error handling.
           </div>

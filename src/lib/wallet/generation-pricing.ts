@@ -26,3 +26,5 @@ export const GENERATE_ALL_INCLUDED_ASSETS: AssetType[] = [
 export function getGenerateAllProjectedCreditCost() {
   return GENERATE_ALL_INCLUDED_ASSETS.reduce((total, type) => total + getAssetGenerationCreditCost(type), 0);
 }
+
+export const SCREENSHOT_CREATIVE_CREDITS_PER_IMAGE = 2;
