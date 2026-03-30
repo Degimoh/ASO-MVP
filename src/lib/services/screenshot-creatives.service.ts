@@ -8,10 +8,14 @@ import {
   buildScreenshotCreativesPrompt,
   ScreenshotCreativePromptInput,
 } from "@/src/lib/prompts/screenshot-creatives.builder";
-import { requestOpenRouterJson } from "@/src/lib/services/openrouter.service";
+import { OpenRouterServiceError, requestOpenRouterJson } from "@/src/lib/services/openrouter.service";
 
 const TARGET_WIDTH = 1284;
 const TARGET_HEIGHT = 2778;
+const NANO_BANANA_PRO_MODEL = "google/gemini-3-pro-image-preview";
+const NANO_BANANA_2_MODEL = "google/gemini-3.1-flash-image-preview";
+
+const allowedScreenshotCreativeModels = new Set<string>([NANO_BANANA_PRO_MODEL, NANO_BANANA_2_MODEL]);
 
 const overlaySchema = z.object({
   items: z
@@ -57,6 +61,35 @@ export type ScreenshotCreativeImageInput = {
   screenshotId: string;
   index: number;
 };
+
+function resolveScreenshotCreativeModelCandidates(requestedModel?: string): string[] {
+  const normalizedRequested = requestedModel?.trim();
+  const configuredDefault = process.env.OPENROUTER_SCREENSHOT_CREATIVE_MODEL?.trim();
+
+  if (normalizedRequested) {
+    if (!allowedScreenshotCreativeModels.has(normalizedRequested)) {
+      throw new Error(
+        `Unsupported screenshot creative model "${normalizedRequested}". Use "${NANO_BANANA_PRO_MODEL}" or "${NANO_BANANA_2_MODEL}".`,
+      );
+    }
+
+    return [normalizedRequested];
+  }
+
+  if (configuredDefault) {
+    if (!allowedScreenshotCreativeModels.has(configuredDefault)) {
+      throw new Error(
+        `Invalid OPENROUTER_SCREENSHOT_CREATIVE_MODEL value "${configuredDefault}". Use "${NANO_BANANA_PRO_MODEL}" or "${NANO_BANANA_2_MODEL}".`,
+      );
+    }
+
+    return configuredDefault === NANO_BANANA_PRO_MODEL
+      ? [NANO_BANANA_PRO_MODEL, NANO_BANANA_2_MODEL]
+      : [NANO_BANANA_2_MODEL, NANO_BANANA_PRO_MODEL];
+  }
+
+  return [NANO_BANANA_PRO_MODEL, NANO_BANANA_2_MODEL];
+}
 
 function escapeXml(value: string) {
   return value
@@ -147,12 +180,33 @@ export async function generateScreenshotCreativeOverlays(
     screenshotCount: input.screenshotCount,
   } satisfies ScreenshotCreativePromptInput);
 
-  const completion = await requestOpenRouterJson<unknown>({
-    systemPrompt: prompts.systemPrompt,
-    userPrompt: prompts.userPrompt,
-    model: input.model,
-    temperature: input.temperature,
-  });
+  const modelCandidates = resolveScreenshotCreativeModelCandidates(input.model);
+  let completion: Awaited<ReturnType<typeof requestOpenRouterJson<unknown>>> | null = null;
+  let lastError: unknown = null;
+
+  for (const candidateModel of modelCandidates) {
+    try {
+      completion = await requestOpenRouterJson<unknown>({
+        systemPrompt: prompts.systemPrompt,
+        userPrompt: prompts.userPrompt,
+        model: candidateModel,
+        temperature: input.temperature,
+      });
+      break;
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof OpenRouterServiceError)) {
+        throw error;
+      }
+    }
+  }
+
+  if (!completion) {
+    throw (
+      lastError ??
+      new Error("Unable to generate screenshot creatives with Nano Banana models")
+    );
+  }
 
   const parsed = overlaySchema.safeParse(completion.data);
   if (!parsed.success) {

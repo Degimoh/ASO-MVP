@@ -98,6 +98,14 @@ Open http://localhost:3000.
 
 Set `OPENROUTER_API_KEY` in `.env` to use live generation.
 
+Screenshot creative text overlays default to Nano Banana models:
+- `google/gemini-3-pro-image-preview` (Nano Banana Pro)
+- fallback: `google/gemini-3.1-flash-image-preview` (Nano Banana 2)
+
+You can override this with:
+- `SCREENSHOT_CREATIVE_MODEL`
+- `SCREENSHOT_CREATIVE_FALLBACK_MODEL`
+
 If no key is set, the app uses a deterministic fallback template response so the MVP workflow still works.
 
 ## Internal Credits + Crypto Checkout
