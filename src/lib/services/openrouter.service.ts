@@ -11,7 +11,7 @@ type OpenRouterConfig = {
 
 export type OpenRouterChatCompletionInput = {
   systemPrompt: string;
-  userPrompt: string;
+  userPrompt: string | OpenRouterMessageContentPart[];
   model?: string;
   temperature?: number;
   signal?: AbortSignal;
@@ -108,10 +108,19 @@ function normalizePrompt(value: string, label: string) {
   return trimmed;
 }
 
-type OpenRouterTextPart = {
-  type: "text";
-  text: string;
-};
+export type OpenRouterMessageContentPart =
+  | {
+      type: "text";
+      text: string;
+    }
+  | {
+      type: "image_url";
+      image_url: {
+        url: string;
+      };
+    };
+
+type OpenRouterTextPart = Extract<OpenRouterMessageContentPart, { type: "text" }>;
 
 function extractMessageContent(content: unknown): string {
   if (typeof content === "string") {
@@ -205,9 +214,13 @@ export async function requestOpenRouterChatCompletion(
 ): Promise<OpenRouterChatCompletionResult> {
   const config = resolveConfig();
   const systemPrompt = normalizePrompt(input.systemPrompt, "System prompt");
-  const userPrompt = normalizePrompt(input.userPrompt, "User prompt");
+  const userPrompt =
+    typeof input.userPrompt === "string"
+      ? normalizePrompt(input.userPrompt, "User prompt")
+      : input.userPrompt;
   const model = input.model?.trim() || config.defaultModel;
   const temperature = normalizeTemperature(input.temperature);
+  const userContent = userPrompt;
 
   let response: Response;
 
@@ -225,7 +238,7 @@ export async function requestOpenRouterChatCompletion(
         temperature,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          { role: "user", content: userContent },
         ],
       }),
       signal: input.signal,

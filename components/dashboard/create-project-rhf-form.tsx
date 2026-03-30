@@ -133,7 +133,7 @@ export function CreateProjectRHFForm() {
   }
 
   return (
-    <Card>
+    <Card className="border-slate-200/80 bg-white/90 shadow-lg backdrop-blur">
       <CardHeader>
         <CardTitle>Project Details</CardTitle>
         <CardDescription>
@@ -307,9 +307,9 @@ export function CreateProjectRHFForm() {
             />
           </div>
 
-          <div className="md:col-span-2 space-y-3">
+          <div className="space-y-3 md:col-span-2">
             {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" className="shadow-sm" disabled={isSubmitting}>
               {isSubmitting ? "Creating project..." : "Create Project"}
             </Button>
           </div>

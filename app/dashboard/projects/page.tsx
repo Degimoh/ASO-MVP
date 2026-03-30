@@ -56,7 +56,7 @@ export default async function ProjectsPage() {
       ) : null}
 
       {!loadError && projects.length === 0 ? (
-        <Card>
+        <Card className="border-dashed bg-white/80">
           <CardHeader>
             <CardTitle>No projects yet</CardTitle>
             <CardDescription>Create your first project to start generating ASO assets.</CardDescription>
@@ -70,27 +70,29 @@ export default async function ProjectsPage() {
       ) : !loadError ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
-            <Card key={project.id}>
-              <CardHeader className="space-y-1 pb-3">
-                <CardTitle className="text-base">{project.appName}</CardTitle>
-                <CardDescription>{project.category}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm text-slate-600">
-                <p>
-                  <span className="font-medium text-slate-900">Platform:</span> {formatPlatform(project.platform)}
-                </p>
-                <p>
-                  <span className="font-medium text-slate-900">Primary language:</span> {project.primaryLanguage}
-                </p>
-                <p>
-                  <span className="font-medium text-slate-900">Updated:</span>{" "}
-                  {new Intl.DateTimeFormat("en-US", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  }).format(project.updatedAt)}
-                </p>
-              </CardContent>
-            </Card>
+            <Link key={project.id} href={`/dashboard/projects/${project.id}`} className="block">
+              <Card className="h-full border-emerald-200/80 transition hover:-translate-y-0.5 hover:border-lime-300 hover:shadow-lg hover:shadow-lime-300/35">
+                <CardHeader className="space-y-1 pb-3">
+                  <CardTitle className="text-base">{project.appName}</CardTitle>
+                  <CardDescription>{project.category}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm text-slate-600">
+                  <p>
+                    <span className="font-medium text-slate-900">Platform:</span> {formatPlatform(project.platform)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-900">Primary language:</span> {project.primaryLanguage}
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-900">Updated:</span>{" "}
+                    {new Intl.DateTimeFormat("en-US", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }).format(project.updatedAt)}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       ) : null}

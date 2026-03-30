@@ -4,9 +4,15 @@ import { PageShell } from "@/components/dashboard/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScreenshotCreativesPanel } from "@/components/workspace/screenshot-creatives-panel";
 import { ProjectWorkspaceTabs, WorkspaceTabType } from "@/components/workspace/project-workspace-tabs";
 import { getCurrentUserFromSession } from "@/src/lib/auth/session";
 import { getProjectWorkspaceByIdForUser } from "@/src/lib/repositories/project.repository";
+import {
+  formatScreenshotCreativeModelName,
+  resolveScreenshotCreativeModelConfig,
+} from "@/src/lib/screenshot-creatives/models";
+import { SCREENSHOT_CREATIVE_CREDITS_PER_IMAGE } from "@/src/lib/wallet/generation-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -33,15 +39,16 @@ export default async function ProjectWorkspacePage({
 }) {
   const { projectId } = await params;
   let project: Awaited<ReturnType<typeof getProjectWorkspaceByIdForUser>> = null;
+  let authUser: Awaited<ReturnType<typeof getCurrentUserFromSession>> = null;
   let loadError: string | null = null;
 
   try {
-    const user = await getCurrentUserFromSession();
+    authUser = await getCurrentUserFromSession();
 
-    if (!user) {
+    if (!authUser) {
       loadError = "Unauthorized";
     } else {
-      project = await getProjectWorkspaceByIdForUser(projectId, user.id);
+      project = await getProjectWorkspaceByIdForUser(projectId, authUser.id);
     }
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Unknown database error";
@@ -94,13 +101,16 @@ export default async function ProjectWorkspacePage({
     model: result.model,
     generatedAt: result.generatedAt.toISOString(),
   }));
+  const screenshotCreativeModelLabel = formatScreenshotCreativeModelName(
+    resolveScreenshotCreativeModelConfig().primaryModel,
+  );
 
   return (
     <PageShell
       title="Project Workspace"
       description="Review project context and manage ASO content drafts by tab."
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/70 bg-white/70 p-3 shadow-sm backdrop-blur">
         <Link
           href="/dashboard/projects"
           className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
@@ -188,7 +198,16 @@ export default async function ProjectWorkspacePage({
             availableLocales={project.locales.map((locale) => locale.code)}
             initialContent={initialContent}
             initialVersionHistory={initialVersionHistory}
+            initialWalletBalance={authUser?.walletBalance ?? 0}
           />
+          <div className="mt-4">
+            <ScreenshotCreativesPanel
+              projectId={project.id}
+              initialWalletBalance={authUser?.walletBalance ?? 0}
+              creditsPerImage={SCREENSHOT_CREATIVE_CREDITS_PER_IMAGE}
+              screenshotCreativeModelLabel={screenshotCreativeModelLabel}
+            />
+          </div>
           <div className="mt-3 text-xs text-slate-500">
             Individual generators and Generate All are connected with partial-error handling.
           </div>

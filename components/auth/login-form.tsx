@@ -45,9 +45,9 @@ export function LoginForm() {
   }
 
   return (
-    <Card>
+    <Card className="border-lime-200/80 bg-white/95 shadow-[0_18px_42px_-28px_rgba(132,204,22,0.35)] backdrop-blur">
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
+        <CardTitle className="text-2xl">Sign in</CardTitle>
         <CardDescription>Access your AI ASO workspace.</CardDescription>
       </CardHeader>
       <CardContent>
@@ -87,7 +87,7 @@ export function LoginForm() {
 
         <p className="mt-4 text-center text-sm text-slate-600">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-medium text-slate-900 hover:underline">
+          <Link href="/register" className="font-medium text-lime-700 hover:underline">
             Create one
           </Link>
         </p>
