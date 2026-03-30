@@ -37,6 +37,28 @@ async function safeUnlink(storagePath: string | null | undefined) {
   }
 }
 
+function toUploadErrorPayload(error: unknown) {
+  const details = error instanceof Error ? error.message : "Unknown error";
+  const normalized = details.toLowerCase();
+
+  if (
+    (normalized.includes("projectscreenshot") || normalized.includes("screenshotcreative")) &&
+    (normalized.includes("does not exist") || normalized.includes("relation"))
+  ) {
+    return {
+      error: "Screenshot tables are missing in the database",
+      details:
+        "Apply latest Prisma migrations on this environment (including 0004_screenshot_creatives). Run: npx prisma migrate deploy",
+      code: "MIGRATION_REQUIRED",
+    };
+  }
+
+  return {
+    error: "Failed to upload screenshots",
+    details,
+  };
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ projectId: string }> },
@@ -167,13 +189,7 @@ export async function POST(
       error: error instanceof Error ? error.message : "Unknown error",
     });
 
-    return NextResponse.json(
-      {
-        error: "Failed to upload screenshots",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json(toUploadErrorPayload(error), { status: 500 });
   }
 }
 

@@ -54,6 +54,14 @@ type ApiErrorBody = {
   availableCredits?: number;
 };
 
+function buildApiErrorMessage(body: ApiErrorBody, fallback: string) {
+  if (body.code === "MIGRATION_REQUIRED") {
+    return `${body.error || "Database migration required"}. ${body.details || ""}`.trim();
+  }
+
+  return body.error || body.details || fallback;
+}
+
 type Props = {
   projectId: string;
   initialWalletBalance: number;
@@ -143,21 +151,25 @@ export function ScreenshotCreativesPanel({
     setNotice(null);
 
     try {
-      const formData = new FormData();
-      Array.from(files).forEach((file) => formData.append("files", file));
+      const uploadedItems: UploadedScreenshot[] = [];
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("files", file);
 
-      const response = await fetch(`/api/projects/${projectId}/screenshots`, {
-        method: "POST",
-        body: formData,
-      });
-      const body = (await response.json()) as ApiErrorBody & {
-        data?: UploadedScreenshot[];
-      };
+        const response = await fetch(`/api/projects/${projectId}/screenshots`, {
+          method: "POST",
+          body: formData,
+        });
+        const body = (await response.json()) as ApiErrorBody & {
+          data?: UploadedScreenshot[];
+        };
 
-      if (!response.ok || !body.data) {
-        throw new Error(body.error || "Failed to upload screenshots");
+        if (!response.ok || !body.data) {
+          throw new Error(buildApiErrorMessage(body, `Failed to upload ${file.name}`));
+        }
+
+        uploadedItems.push(...body.data);
       }
-      const uploadedItems = body.data;
 
       setScreenshots((prev) => {
         const merged = [...uploadedItems, ...prev];
